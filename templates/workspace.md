@@ -16,7 +16,7 @@ $ARGUMENTS
 ### Step 1: 检查配置
 
 ```bash
-cat .sillyspec/config.yaml 2>/dev/null
+ls .sillyspec/projects/*.yaml 2>/dev/null | grep -q .
 ```
 
 不存在 → 询问是否初始化工作区。
@@ -33,17 +33,17 @@ cat .sillyspec/config.yaml 2>/dev/null
 git -C <path> remote get-url origin 2>/dev/null
 ```
 检测到则写入 repo 字段，检测不到则留空
-3. 更新 config.yaml，追加子项目配置
-- `remove` → 移除子项目
+3. 创建 `.sillyspec/projects/<name>.yaml` 文件
+- `remove` → 删除 `.sillyspec/projects/<name>.yaml` 文件
 - `sync` → 同步子项目（clone 缺失的，检查冲突）
 
 ### Step 3: 执行操作
 
-**初始化工作区：** 询问名称 → 逐个添加子项目（名称、路径、角色描述，验证路径存在）→ 共享规范 → 生成 config.yaml + `.sillyspec/shared/`
+**初始化工作区：** 询问名称 → 逐个添加子项目（名称、路径、角色描述，验证路径存在）→ 共享规范 → 创建 `projects/*.yaml` + `.sillyspec/shared/`
 
-**添加/移除子项目：** 更新 config.yaml，Git 提交。
+**添加/移除子项目：** 创建或删除 `projects/<name>.yaml`，Git 提交。
 
-**状态显示：** 读取每个子项目的 `.sillyspec/` 内容（PROJECT.md、codebase 文档数、进行中变更），输出格式：
+**状态显示：** 读取每个子项目的 `.sillyspec/` 内容（PROJECT.md、docs/<project>/scan/ 文档数、进行中变更），输出格式：
 
 ```
 🏢 工作区：<name>
@@ -54,14 +54,17 @@ git -C <path> remote get-url origin 2>/dev/null
 💡 操作：/sillyspec:workspace add | /sillyspec:init | /sillyspec:scan
 ```
 
-### config.yaml 格式
+### 读取子项目信息
 
-```yaml
-projects:
-  <name>:
-    path: <relative-path>
-    role: <description>
-    repo: <git-remote-url>  # 可选，git remote get-url origin
-shared:
-  - <filename.md>
+```bash
+for f in .sillyspec/projects/*.yaml; do
+  [ -f "$f" ] || continue
+  proj_name=$(basename "$f" .yaml)
+  proj_path=$(grep '^path:' "$f" | head -1 | sed 's/^path:[[:space:]]*//')
+  proj_role=$(grep '^role:' "$f" | head -1 | sed 's/^role:[[:space:]]*//')
+  proj_repo=$(grep '^repo:' "$f" | head -1 | sed 's/^repo:[[:space:]]*//')
+  # 检查文档数、变更数等
+  doc_count=$(ls "$proj_path"/.sillyspec/docs/$proj_name/scan/*.md 2>/dev/null | wc -l)
+  echo "  $proj_name  $proj_path    $proj_role    docs:$doc_count"
+done
 ```

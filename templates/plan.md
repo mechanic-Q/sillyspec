@@ -22,7 +22,7 @@ cat .sillyspec/STATE.md 2>/dev/null
 ### 1. 加载上下文
 
 ```bash
-cat .sillyspec/config.yaml 2>/dev/null
+ls .sillyspec/projects/*.yaml 2>/dev/null | grep -q .
 ```
 
 **工作区模式：** 加载 CODEBASE-OVERVIEW.md + 共享规范 + 子项目的 CONVENTIONS/ARCHITECTURE/STACK + REQUIREMENTS.md。
@@ -31,7 +31,7 @@ cat .sillyspec/config.yaml 2>/dev/null
 ```bash
 LATEST=$(ls -d .sillyspec/changes/*/ | grep -v archive | tail -1)
 cat "$LATEST"/{design,tasks}.md 2>/dev/null
-cat .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
+cat .sillyspec/docs/<project>/scan/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
 cat .sillyspec/REQUIREMENTS.md 2>/dev/null
 ```
 

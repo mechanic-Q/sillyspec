@@ -29,7 +29,7 @@ $ARGUMENTS
 ```bash
 ls .sillyspec/changes/ 2>/dev/null | grep -v archive
 cat .sillyspec/{REQUIREMENTS,ROADMAP}.md 2>/dev/null
-cat .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
+cat .sillyspec/docs/*/scan/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
 cat .sillyspec/knowledge/INDEX.md 2>/dev/null
 ```
 

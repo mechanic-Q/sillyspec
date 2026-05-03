@@ -26,7 +26,7 @@ ls .sillyspec/changes/ 2>/dev/null | grep -v archive
 
 ## 工作区模式处理
 
-如果 `.sillyspec/config.yaml` 包含 `projects` 字段：
+如果 `.sillyspec/projects/` 目录下有 yaml 文件：
 
 1. 检查工作区根目录 `.sillyspec/changes/` 下的未归档变更
 2. 检查每个子项目 `<子项目路径>/.sillyspec/changes/` 下的未归档变更

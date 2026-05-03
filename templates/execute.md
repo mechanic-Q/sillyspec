@@ -31,7 +31,7 @@ $ARGUMENTS
 ## 加载上下文
 
 ```bash
-cat .sillyspec/config.yaml 2>/dev/null
+ls .sillyspec/projects/*.yaml 2>/dev/null | grep -q .
 ```
 
 **工作区模式：** 根据计划 Task 标注确定子项目，额外加载共享规范 + CODEBASE-OVERVIEW.md。所有代码修改、测试运行在子项目目录中执行。
@@ -41,7 +41,7 @@ cat .sillyspec/config.yaml 2>/dev/null
 PLAN=$(ls -t .sillyspec/changes/*/tasks.md 2>/dev/null | head -1); cat "$PLAN"
 LATEST=$(ls -d .sillyspec/changes/*/ | grep -v archive | tail -1)
 cat "$LATEST"/{tasks,design}.md 2>/dev/null
-cat .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
+cat .sillyspec/docs/<project>/scan/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
 cat .sillyspec/local.yaml 2>/dev/null
 ```
 

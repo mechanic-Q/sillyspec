@@ -11,14 +11,24 @@
 ### Step 1: 读取配置
 
 ```bash
-cat .sillyspec/config.yaml 2>/dev/null
+ls .sillyspec/projects/*.yaml 2>/dev/null | grep -q .
 ```
 
-无 config.yaml → 提示先执行 `/sillyspec:workspace` 初始化工作区。
+无子项目配置 → 提示先执行 `/sillyspec:workspace` 初始化工作区。
 
 ### Step 2: 逐个子项目检查
 
-对 config.yaml 中每个子项目，按顺序执行：
+对每个子项目配置文件，按顺序执行：
+
+```bash
+for f in .sillyspec/projects/*.yaml; do
+  [ -f "$f" ] || continue
+  proj_name=$(basename "$f" .yaml)
+  proj_path=$(grep '^path:' "$f" | head -1 | sed 's/^path:[[:space:]]*//')
+  proj_repo=$(grep '^repo:' "$f" | head -1 | sed 's/^repo:[[:space:]]*//')
+  # ... 检查逻辑
+done
+```
 
 ```bash
 # 检查目录是否存在
@@ -29,7 +39,7 @@ ls -d <path> 2>/dev/null && echo "EXISTS" || echo "MISSING"
 
 ```bash
 # 检查是否有 repo 配置
-grep "repo:" .sillyspec/config.yaml | grep -A 1 "<name>"
+grep '^repo:' .sillyspec/projects/<name>.yaml
 ```
 
 - **有 repo** → AskUserQuestion："子项目 `<name>` 不存在，是否从 `<repo>` clone 到 `<path>`？"
@@ -65,7 +75,7 @@ realpath <path1>
 realpath <path2>
 ```
 
-冲突 → ❌ 报错："子项目 A 和 B 的路径冲突，请修改 config.yaml"
+冲突 → ❌ 报错："子项目 A 和 B 的路径冲突，请修改对应的 projects/*.yaml"
 
 ### Step 3: 汇总报告
 
@@ -84,6 +94,6 @@ realpath <path2>
 全部正常 → 提示 `/sillyspec:brainstorm '你的需求'` 继续。
 有异常 → 提示用户处理后再 sync。
 
-### Step 4: 更新 config.yaml
+### Step 4: 更新子项目配置
 
-如果 clone 过程中实际 remote 和 config.yaml 中的 repo 不一致，更新 repo 字段为实际值。
+如果 clone 过程中实际 remote 和 `projects/<name>.yaml` 中的 repo 不一致，更新对应 yaml 文件的 repo 字段为实际值。

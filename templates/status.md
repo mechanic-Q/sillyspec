@@ -11,10 +11,10 @@
 ### Step 1: 检查工作区模式
 
 ```bash
-cat .sillyspec/config.yaml 2>/dev/null
+ls .sillyspec/projects/*.yaml 2>/dev/null | grep -q .
 ```
 
-**工作区模式：** 读取 config.yaml 子项目列表，对每个子项目检查 PROJECT.md、codebase 文档数、进行中变更、归档数。**同时检查工作区根目录 `.sillyspec/changes/` 下的未归档变更。** 检查共享规范和工作区概览。输出汇总后结束，不执行单项目流程。
+**工作区模式：** 读取每个 `projects/*.yaml` 子项目列表，对每个子项目检查 PROJECT.md、docs/<project>/scan/ 文档数、进行中变更、归档数。**同时检查工作区根目录 `.sillyspec/changes/` 下的未归档变更。** 检查共享规范和工作区概览。输出汇总后结束，不执行单项目流程。
 
 工作区变更检查命令：
 ```bash
@@ -23,10 +23,13 @@ ls .sillyspec/changes/ 2>/dev/null | grep -v archive
 ls .sillyspec/changes/archive/ 2>/dev/null | wc -l
 
 # 每个子项目的变更
-for proj in $(cat .sillyspec/config.yaml | grep -oP 'path:\s*\K.*'); do
-  echo "=== $(basename $proj) changes ==="
-  ls "$proj/.sillyspec/changes/" 2>/dev/null | grep -v archive
-  ls "$proj/.sillyspec/changes/archive/" 2>/dev/null | wc -l
+for f in .sillyspec/projects/*.yaml; do
+  [ -f "$f" ] || continue
+  proj_name=$(basename "$f" .yaml)
+  proj_path=$(grep '^path:' "$f" | head -1 | sed 's/^path:[[:space:]]*//')
+  echo "=== $proj_name changes ==="
+  ls "$proj_path"/.sillyspec/changes/ 2>/dev/null | grep -v archive
+  ls "$proj_path"/.sillyspec/changes/archive/ 2>/dev/null | wc -l
 done
 ```
 
@@ -55,10 +58,10 @@ done
 
 ### Step 2-5: 单项目检查
 
-1. **项目基础：** PROJECT.md、codebase 文档、REQUIREMENTS.md、ROADMAP.md
+1. **项目基础：** PROJECT.md、docs/<project>/scan/ 文档、REQUIREMENTS.md、ROADMAP.md
 2. **进行中变更：** 对每个变更检查 design/tasks 完成度
 3. **归档历史：** `ls .sillyspec/changes/archive/ | wc -l`
-4. **代码库文档：** `ls .sillyspec/codebase/`
+4. **代码库文档：** `ls .sillyspec/docs/<project>/scan/`
 
 ### Step 6: 输出
 

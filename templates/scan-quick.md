@@ -13,7 +13,7 @@
 ### Step 1: 检查工作区模式
 
 ```bash
-cat .sillyspec/config.yaml 2>/dev/null
+ls .sillyspec/projects/*.yaml 2>/dev/null | grep -q .
 ```
 
 有 `projects` 字段 → 工作区模式：逐个子项目快扫。

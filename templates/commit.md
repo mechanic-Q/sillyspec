@@ -56,7 +56,7 @@ cat "$LATEST/tasks.md" 2>/dev/null
 
 **来源 C — 阶段产出（scan/brainstorm/propose/plan/archive 等）：**
 检查 `.sillyspec/` 下新增或修改的文件，根据路径识别来源阶段：
-- `codebase/*.md` → scan 产出
+- `docs/*/scan/*.md` → scan 产出
 - `changes/<name>/proposal.md` → propose 产出
 - `changes/<name>/design.md` 或 `tasks.md` → plan 产出
 - `changes/archive/` → archive 产出
@@ -109,7 +109,7 @@ git commit -m "{确认后的 message}"
 ## 工作区模式
 
 ```bash
-cat .sillyspec/config.yaml 2>/dev/null
+ls .sillyspec/projects/*.yaml 2>/dev/null | grep -q .
 ```
 
 有子项目配置时：

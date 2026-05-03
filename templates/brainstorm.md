@@ -68,15 +68,15 @@ $ARGUMENTS
 ### Step 1: 加载项目上下文
 
 ```bash
-cat .sillyspec/config.yaml 2>/dev/null
+ls .sillyspec/projects/*.yaml 2>/dev/null | grep -q .
 ```
 
-**工作区模式：** AskUserQuestion 选子项目，**cd 到子项目目录执行**，加载子项目上下文 + 共享规范 + 工作区概览，设计文档保存到子项目 `.sillyspec/changes/`。修改在子项目目录中暂存。
+**工作区模式：** AskUserQuestion 选子项目，**cd 到子项目目录执行**，加载子项目上下文 + 共享规范 + 工作区概览，设计文档保存到子项目 `.sillyspec/docs/<project>/changes/`。修改在子项目目录中暂存。
 
 **单项目模式：**
 ```bash
 cat .sillyspec/{PROJECT,REQUIREMENTS,ROADMAP}.md 2>/dev/null
-cat .sillyspec/codebase/{STRUCTURE,CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
+cat .sillyspec/docs/<project>/scan/{STRUCTURE,CONVENTIONS,ARCHITECTURE}.md 2>/dev/null
 ls .sillyspec/changes/ 2>/dev/null | grep -v archive
 ls .sillyspec/knowledge/ 2>/dev/null
 ```
@@ -167,7 +167,7 @@ git add .sillyspec/changes/<变更名>/MASTER.md
 （参考已有源文件，标注返回值类型、异常类型、注解风格）
 ```
 
-**注意：** 引用的表名必须来自 ARCHITECTURE.md 数据模型或明确标注"新增"。必须先读取 `.sillyspec/codebase/ARCHITECTURE.md`。
+**注意：** 引用的表名必须来自 ARCHITECTURE.md 数据模型或明确标注"新增"。必须先读取 `.sillyspec/docs/<project>/scan/ARCHITECTURE.md`。
 
 ### Step 9: AI 自审（必须执行）
 

@@ -17,8 +17,7 @@ const DESCRIPTIONS = {
   scan: '代码库扫描 — 支持快速扫描和深度扫描两阶段',
   explore: '自由思考模式 — 讨论、画图、调研，不写代码',
   brainstorm: '需求探索 — 结构化头脑风暴，生成设计文档（创建性工作前必用）',
-  propose: '生成结构化规范 — proposal + design + tasks',
-  plan: '编写实现计划 — 2-5 分钟粒度，精确到文件路径和代码',
+  plan: '编写实现计划 — 任务拆分与实现路径',
   execute: '波次执行 — 子代理并行 + 强制 TDD + 两阶段审查',
   verify: '验证实现 — 对照规范检查 + 测试套件',
   archive: '归档变更 — 规范沉淀，可追溯',
@@ -26,7 +25,7 @@ const DESCRIPTIONS = {
   status: '查看项目进度和状态',
   continue: '自动判断并执行下一步',
   state: '查看当前工作状态 — 显示 STATE.md 内容',
-  resume: '恢复工作 — 从中断处继续',
+
   quick: '快速任务 — 跳过完整流程，直接做',
   workspace: '工作区管理 — 初始化、管理多项目工作区，查看子项目状态',
   export: '导出成功方案为可复用模板',
@@ -37,7 +36,7 @@ const ARG_HINTS = {
   scan: '[可选：指定区域，如 \'api\' 或 \'auth\'] [--deep 深度扫描]',
   explore: '[探索主题]',
   brainstorm: '[需求或想法描述]',
-  propose: '[变更名]',
+
   plan: '[计划名]',
   execute: '[任务编号或 \'all\']',
   verify: '[可选：指定验证范围]',
@@ -46,7 +45,7 @@ const ARG_HINTS = {
   status: '',
   continue: '',
   state: '[可选备注]',
-  resume: '',
+
   quick: '[任务描述]',
   workspace: '[可选：add/remove/status/info]',
   export: '<change-name> [--to <path>]',
@@ -64,8 +63,6 @@ const TOOL_LABELS = {
   opencode: 'OpenCode (通过 INSTRUCTIONS.md)',
 };
 
-// Slash commands 工具：安装 markdown 模板命令
-const SLASH_COMMAND_TOOLS = ['claude', 'claude_skills', 'cursor', 'openclaw'];
 
 // 指令文件工具：注入规范引用到指令文件
 const INSTRUCTION_TOOLS = ['codex', 'gemini', 'opencode'];
@@ -205,11 +202,11 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
   // 创建基础目录
   // .sillyspec/codebase/    → scan
   // .sillyspec/codebase/details/ → scan (deep)
-  // .sillyspec/changes/     → brainstorm/propose
+  // .sillyspec/changes/     → brainstorm/plan
   // .sillyspec/changes/archive/ → archive
   // .sillyspec/quicklog/    → quick
   // .sillyspec/knowledge/   → archive (spec 沉淀)
-  // .sillyspec/.runtime/    → progress (gitignored)
+  // .sillyspec/.runtime/    → runtime data (gitignored)
   // (plan 内容已合并到 tasks.md)
   if (isWorkspace) {
     mkdirSync(join(projectDir, '.sillyspec', 'shared'), { recursive: true });
@@ -232,15 +229,6 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
   const runtimeDir = join(projectDir, '.sillyspec', '.runtime');
   for (const sub of ['artifacts', 'history', 'logs', 'templates']) {
     mkdirSync(join(runtimeDir, sub), { recursive: true });
-  }
-
-  // 复制 resume-dialog.md 到 .runtime/templates/
-  const resumeDialogSrc = join(TEMPLATE_DIR, 'resume-dialog.md');
-  if (existsSync(resumeDialogSrc)) {
-    const dest = join(runtimeDir, 'templates', 'resume-dialog.md');
-    if (!existsSync(dest)) {
-      copyFileSync(resumeDialogSrc, dest);
-    }
   }
 
   // 创建初始 user-inputs.md
@@ -315,27 +303,21 @@ async function doInstall(projectDir, tools, isWorkspace, subprojects = []) {
     }
   }
 
-  // 工作区配置
-  if (isWorkspace) {
-    const configPath = join(projectDir, '.sillyspec', 'config.yaml');
-    if (!existsSync(configPath)) {
-      let projectsYaml = '';
-      if (subprojects.length > 0) {
-        projectsYaml = subprojects.map(p =>
-          `  ${p.name}:\n    path: ${p.path}\n    role: ${p.role || p.name}${p.repo ? `\n    repo: ${p.repo}` : ''}`
-        ).join('\n');
-      }
-
-      writeFileSync(configPath,
-`# SillySpec 工作区配置
-# 修改此文件后运行 /sillyspec:workspace 更新
-
-projects:
-${projectsYaml || '  # 运行 /sillyspec:workspace add 添加子项目'}
-
-shared: []
+  // 工作区子项目配置 → projects/*.yaml
+  if (isWorkspace && subprojects.length > 0) {
+    const projectsDir = join(projectDir, '.sillyspec', 'projects');
+    mkdirSync(projectsDir, { recursive: true });
+    for (const p of subprojects) {
+      const pFile = join(projectsDir, `${p.name}.yaml`);
+      if (!existsSync(pFile)) {
+        writeFileSync(pFile,
+`# ${p.name}
+name: ${p.name}
+path: ${p.path}
+role: ${p.role || p.name}${p.repo ? `\nrepo: ${p.repo}` : ''}
 `
-      );
+        );
+      }
     }
   }
 

@@ -6,10 +6,9 @@
  * 只负责两件事：init（安装命令模板）和 setup（安装 MCP 工具）。
  * 状态管理由 AI 直接读文件（STATE.md）完成，不需要 CLI。
  */
-import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
-import { join, resolve } from 'path';
+import { existsSync } from 'fs';
+import { resolve } from 'path';
 import { cmdInit, getVersion } from './init.js';
-import { ProgressManager } from './progress.js';
 
 // ── CLI 入口 ──
 
@@ -25,12 +24,6 @@ SillySpec CLI — 规范驱动开发工具包
     [--dir <path>]             指定目录
   sillyspec setup [--list]     安装推荐 MCP 工具
     [--list]                   查看已安装状态
-  sillyspec progress <cmd>    进度恢复管理
-    init                      初始化进度文件
-    status                    查看当前进度
-    validate                  校验并修复进度文件
-    reset [--stage X]         重置进度（全部或指定阶段）
-    complete --stage X        归档已完成阶段
   sillyspec dashboard          启动 Dashboard Web UI
     [--port <number>]          指定端口（默认 3456）
     [--no-open]                不自动打开浏览器
@@ -107,33 +100,9 @@ async function main() {
       const setupList = filteredArgs.includes('--list') || filteredArgs.includes('-l');
       await (await import('./setup.js')).cmdSetup(dir, { json, list: setupList });
       break;
-    case 'progress': {
-      const pm = new ProgressManager();
-      const subCommand = filteredArgs[1];
-      const stageIdx = args.indexOf('--stage');
-      const stage = stageIdx >= 0 && args[stageIdx + 1] ? args[stageIdx + 1] : null;
-
-      switch (subCommand) {
-        case 'init':
-          pm.init(dir);
-          break;
-        case 'status':
-          pm.status(dir);
-          break;
-        case 'validate':
-          pm.validate(dir);
-          break;
-        case 'reset':
-          pm.reset(dir, stage);
-          break;
-        case 'complete':
-          pm.complete(dir, stage);
-          break;
-        default:
-          console.log('用法: sillyspec progress <init|status|validate|reset|complete> [--stage <stage>]');
-      }
+    case 'progress':
+      console.log('⚠️  阶段控制功能已移除，各阶段独立运行。');
       break;
-    }
     case 'dashboard': {
       // Parse dashboard options
       let port = 3456;

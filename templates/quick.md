@@ -28,7 +28,7 @@ $ARGUMENTS
    - 用户选择"无归属" → 走原有的独立 QUICKLOG 流程
    - 无活跃变更 → 走原有的独立 QUICKLOG 流程
 2. **理解任务：** 模糊则问一个问题确认
-3. **加载上下文：** `cat .sillyspec/codebase/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null`
+3. **加载上下文：** `cat .sillyspec/docs/<project>/scan/{CONVENTIONS,ARCHITECTURE}.md 2>/dev/null`
 3b. **编码规范扫描：** 检测项目中的编码规范配置文件（`.eslintrc*`、`.prettierrc*`、`tsconfig.json`、`.editorconfig`、`tailwind.config.*`、`CONTRIBUTING.md`），提取关键规则生成摘要。写作代码时必须严格遵守这些规则（分号/引号/缩进/命名风格等），如不确定优先遵守规范约束。
 4. **知识库查询（强制步骤）：**
    ```bash

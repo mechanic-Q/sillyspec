@@ -7,7 +7,7 @@
 
 **先检查是否工作区模式：**
 ```bash
-cat .sillyspec/config.yaml 2>/dev/null | grep -q "projects"
+ls .sillyspec/projects/*.yaml 2>/dev/null | grep -q .
 ```
 
 **工作区模式：** 同时检查根目录和每个子项目，列出所有未完成的工作，让用户选择继续哪个。
@@ -22,7 +22,7 @@ cat .sillyspec/config.yaml 2>/dev/null | grep -q "projects"
    1d. tasks.md 全完成 + 未验证 → 执行 /sillyspec:verify（可选）
    1e. 已验证通过 → 执行 /sillyspec:archive
 
-2. 有 .sillyspec/codebase/ 但无进行中工作？
+2. 有 .sillyspec/docs/*/scan/ 但无进行中工作？
    → /sillyspec:brainstorm "你的想法"
 
 3. 什么都没有？
