@@ -5,24 +5,9 @@
 
 ## 核心约束（必须遵守）
 - ❌ 修改任何代码（只做检查和报告）
-- ❌ 跳过状态检查
 - ❌ 自行推进到下一阶段
 
-## 状态检查（必须先执行）
 
-```bash
-cat .sillyspec/STATE.md 2>/dev/null
-```
-
-检查当前阶段。如果没有 STATE.md，检查是否有未归档变更：
-
-```bash
-ls .sillyspec/changes/ 2>/dev/null | grep -v archive
-```
-
-无 STATE.md 且无未归档变更 → 提示用户先完成 execute 或用 `/sillyspec:status` 查看状态。
-
----
 
 ## 工作区模式处理
 
@@ -118,8 +103,7 @@ while ROUND <= MAX_ROUNDS:
           - "只修复这个测试失败，不要改其他代码"
        c. 修复后重跑该测试确认是否通过
        d. 通过 → fixAttempts 保持不变；仍失败 → fixAttempts + 1
-    5. 写入 .sillyspec/local.yaml 更新 fixAttempts
-    6. ROUND++
+    5. 写入 .sillyspec/local.yaml     6. ROUND++
     7. 如果本轮无任何修复（所有失败都已 MAX_REACHED）→ 跳出循环
 ```
 
@@ -250,4 +234,3 @@ fi
 
 ### 7. 完成
 
-更新 `.sillyspec/STATE.md`（如存在）：阶段改为 `verify ✅` 或 `verify ⚠️`，记录精确到秒的时间戳。

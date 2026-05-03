@@ -6,16 +6,7 @@
 - ❌ 每个步骤缺验证命令和预期输出
 - ❌ 编造表名、字段名（必须来自 ARCHITECTURE.md 或 design.md）
 
-## 状态检查（必须先执行）
 
-```bash
-cat .sillyspec/STATE.md 2>/dev/null
-```
-
-- phase 为 `plan` 或 STATE.md 中下一步为 `/sillyspec:plan` → ✅ 继续
-- 其他 phase → 提示用户当前阶段
-
----
 
 ## 流程
 
@@ -149,8 +140,6 @@ cat .claude/mcp.json .cursor/mcp.json 2>/dev/null | grep -i "browser\|chrome\|de
 发现遗漏时用 AskUserQuestion 确认追加内容，用户确认后再写入 tasks.md。
 
 ### 7. 完成
-
-更新 `.sillyspec/STATE.md`：阶段改为 `plan ✅`，下一步 `/sillyspec:execute`。
 
 ```bash
 cat .sillyspec/STATE.md 2>/dev/null

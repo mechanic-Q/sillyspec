@@ -50,7 +50,6 @@ cat .sillyspec/knowledge/INDEX.md 2>/dev/null
 
 1. **🧠 头脑风暴** — `/sillyspec:brainstorm` 深度探索需求和方案
 2. **⚡ 快速执行** — `/sillyspec:quick` 直接动手做
-3. **📋 创建规范** — `/sillyspec:propose` 生成结构化规范
 4. **🔍 继续探索** — 还没聊透，继续
 
 不需要每次都提示，只在对话**明显转向执行意图**时触发。纯讨论、提问、查资料时不要打断。

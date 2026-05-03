@@ -8,16 +8,7 @@
 - `--deep` → 直接深度扫描
 - 其他 → 快速扫描该区域
 
-## 流程控制（必须先执行）
 
-```bash
-cat .sillyspec/STATE.md 2>/dev/null
-```
-
-有 STATE.md 且 phase 为 `scan` 或未记录 → 继续。
-其他 phase → STATE.md 中记录的下一步命令为准。
-
----
 
 ## 交互式引导（参数为空时）
 
@@ -136,18 +127,11 @@ if [ ! -f ".sillyspec/knowledge/uncategorized.md" ]; then
 EOF
 fi
 
-# 更新状态
+# 记录状态
 cat > .sillyspec/STATE.md << 'EOF'
 # 项目状态
 
-## 当前阶段
-- 阶段：scan ✅
-- 下一步：/sillyspec:brainstorm
-
-## 关键决策
-- （扫描中发现的技术决策）
-
-## 历史记录
+## 最近活动
 - $(date '+%Y-%m-%d %H:%M:%S') scan 完成
 EOF
 

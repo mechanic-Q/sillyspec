@@ -109,7 +109,6 @@ git log --oneline --no-merges --since="<创建时间>" -- "*.ts" "*.js" "*.vue" 
 
 - **tasks.md：** 确保所有 checkbox 都已勾选 `[x]`
 - **ROADMAP.md**（如存在）：标记对应 Phase 已完成
-- **STATE.md：** 清除当前变更信息，历史记录追加归档完成（含精确到秒的时间戳）
 - **Git 暂存：** `git add .sillyspec/`
 
 **工作区模式下：** 如果变更属于某个子项目，cd 到子项目目录执行 git add。工作区根目录无 git 则跳过。

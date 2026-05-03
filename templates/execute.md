@@ -2,7 +2,6 @@
 **当需要用户从多个选项中做出选择时，必须使用 Claude Code 内置的 AskUserQuestion 工具，将选项以参数传入。**
 
 ## 核心约束（必须遵守）
-- ❌ 跳过状态检查，自行推断阶段
 - ❌ 跳步执行（不允许跳过 plan 直接 execute）
 - ❌ 先写代码后补测试
 - ❌ 编造不存在的方法/注解/路径/类/字段
@@ -14,14 +13,6 @@
 ```bash
 cat .sillyspec/STATE.md 2>/dev/null
 ```
-
-有 STATE.md 且 phase 为 execute → 继续。无 STATE.md 或 phase 不对 → 检查是否有未完成的 tasks.md：
-
-```bash
-ls .sillyspec/changes/*/tasks.md 2>/dev/null | xargs grep -l '\- \[ \]' 2>/dev/null
-```
-
-有未完成的 tasks.md → 继续。没有 → 提示 `/sillyspec:continue`。
 
 ## 执行范围
 $ARGUMENTS
@@ -311,4 +302,3 @@ grep -c '^\### \[待确认\]' .sillyspec/knowledge/uncategorized.md 2>/dev/null
 2. **归档** — 跳过 verify，执行 `/sillyspec:archive`
 3. **继续开发** — 不结束当前阶段
 
-更新 `.sillyspec/STATE.md`：阶段改为 `execute ✅` 或 `execute 🔄 (X/M)`，历史记录追加执行结果（含精确到秒的时间戳）。
