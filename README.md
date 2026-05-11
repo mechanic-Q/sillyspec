@@ -19,7 +19,7 @@
 npx sillyspec init
 ```
 
-> 📦 首次运行自动安装 CLI，之后 `sillyspec status`/`sillyspec next` 等命令也可直接使用。
+> 📦 首次运行自动安装 CLI，之后 `sillyspec run brainstorm`/`sillyspec progress show` 等命令也可直接使用。
 
 **指定工具：**
 ```bash
@@ -112,9 +112,10 @@ claude --dangerously-skip-permissions
 ## CLI 命令
 
 ```bash
-sillyspec status [--json]    显示当前项目状态
-sillyspec next [--json]      显示下一步命令
-sillyspec check [--json]     检查文档完整性
+sillyspec run <stage>        执行阶段步骤（brainstorm/plan/execute/verify 等）
+sillyspec run <stage> --done 完成当前步骤并输出下一步
+sillyspec run <stage> --status 查看阶段进度
+sillyspec progress show      显示当前项目状态
 sillyspec setup              安装推荐 MCP 工具（交互式）
 sillyspec setup --list       查看已安装 MCP 状态
 sillyspec init               初始化（零交互，自动检测工具）
@@ -167,7 +168,7 @@ SillySpec 不仅仅是 prompt，还有硬校验：
 sillyspec/
 ├── bin/sillyspec.js              # CLI 入口
 ├── src/
-│   ├── index.js                  # status/next/check 命令
+│   ├── index.js                  # CLI 命令入口
 │   ├── init.js                   # init 逻辑 + 工具适配器
 │   └── setup.js                  # MCP 工具安装
 ├── templates/                    # 命令模板（19 个）

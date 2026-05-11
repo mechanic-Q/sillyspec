@@ -9,7 +9,7 @@ import { spawn } from 'child_process'
  * @returns {function} Kill function to terminate the process
  */
 export function executeCommand(projectPath, command, onOutput, onComplete) {
-  const args = command.split(' ')
+  const args = String(command || '').trim().split(/\s+/).filter(Boolean)
   const proc = spawn('npx', ['sillyspec', ...args], {
     cwd: projectPath,
     env: { ...process.env }

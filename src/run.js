@@ -90,9 +90,9 @@ async function ensureStageSteps(progress, stageName, cwd) {
   if (progress.stages[stageName].steps.length !== steps.length) {
     // 保留已完成的状态，重新构建步骤列表
     const oldSteps = progress.stages[stageName].steps
-    progress.stages[stageName].steps = steps.map((s, i) => {
-      const old = oldSteps[i]
-      if (old && old.name === s.name) return old
+    progress.stages[stageName].steps = steps.map(s => {
+      const old = oldSteps.find(step => step.name === s.name)
+      if (old) return old
       return { name: s.name, status: 'pending' }
     })
     return true
@@ -274,7 +274,7 @@ async function runStage(pm, progress, stageName, cwd) {
     console.log(`  继续执行将重新开始，可用 --reset 显式重置。\n`)
     // 自动重置，允许重复执行
     steps.forEach(s => { s.status = 'pending'; s.completedAt = null; s.output = null; s.startedAt = null })
-    stageData.status = 'in_progress'
+    stageData.status = 'in-progress'
     stageData.completedAt = null
     pm._write(cwd, progress)
     currentIdx = 0
@@ -286,7 +286,6 @@ async function runStage(pm, progress, stageName, cwd) {
     console.log(`  继续执行将从中断处恢复，用 --reset 可重新开始。\n`)
   }
 
-  const stageDef = stageRegistry[stageName]
   const defSteps = await getStageSteps(stageName, cwd, progress)
   if (defSteps && defSteps[currentIdx]) {
     outputStep(stageName, currentIdx, defSteps, cwd)
@@ -325,7 +324,8 @@ function validateMetadata(cwd, stageName) {
   }
 }
 
-async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null) {
+async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
+  const { printNext = true } = options
   const stageData = progress.stages[stageName]
   if (!stageData || !stageData.steps) {
     console.error(`❌ 阶段 ${stageName} 未初始化`)
@@ -371,13 +371,13 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       const taskSteps = fullSteps.slice(5, -2) // 排除 5 个前缀和 2 个后缀
       if (taskSteps.length > 0) {
         // 插入审查一致性 + 保存步骤（后缀）
-        const suffixSteps = fullSteps.slice(-2)
-        for (const ts of taskSteps) {
-          steps.push({ name: ts.name, status: 'pending', prompt: ts.prompt, outputHint: ts.outputHint, optional: false })
-        }
-        for (const ss of suffixSteps) {
-          steps.push({ name: ss.name, status: 'pending', prompt: ss.prompt, outputHint: ss.outputHint, optional: false })
-        }
+        const oldSteps = [...steps]
+        const rebuilt = fullSteps.map(stepDef => {
+          const existing = oldSteps.find(s => s.name === stepDef.name)
+          if (existing) return existing
+          return { name: stepDef.name, status: 'pending' }
+        })
+        steps.splice(0, steps.length, ...rebuilt)
         // 重新查找下一步
       }
     }
@@ -405,7 +405,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     const total = steps.length
     console.log(`✅ ${stageName} 阶段已完成（${total}/${total} 步）`)
     console.log(`\n下一步由你决定：sillyspec run <stage>（brainstorm/plan/execute/verify/archive 等）`)
-    return
+    return { stageCompleted: true, currentIdx, nextPendingIdx: -1 }
   }
 
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
@@ -420,7 +420,10 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
 
   const defSteps = await getStageSteps(stageName, cwd, progress)
   console.log(`✅ Step ${currentIdx + 1}/${steps.length} 完成：${steps[currentIdx].name}\n`)
-  outputStep(stageName, nextPendingIdx, defSteps, cwd)
+  if (printNext) {
+    outputStep(stageName, nextPendingIdx, defSteps, cwd)
+  }
+  return { stageCompleted: false, currentIdx, nextPendingIdx }
 }
 
 async function skipStep(pm, progress, stageName, cwd) {
@@ -483,17 +486,17 @@ function showStatus(progress, stageName) {
   if (progress.batchProgress) {
     const bp = progress.batchProgress
     const total = bp.total || 0
-    const bpCompleted = bp.completed || 0
+    const completed = bp.completed || 0
     const failed = bp.failed || 0
     const skipped = bp.skipped || 0
     const barLen = 20
-    const filled = Math.round((bpCompleted / Math.max(total, 1)) * barLen)
+    const filled = Math.round((completed / Math.max(total, 1)) * barLen)
     const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled)
     const parts = []
     if (failed > 0) parts.push(`${failed} 失败`)
     if (skipped > 0) parts.push(`${skipped} 跳过`)
     const suffix = parts.length ? ` (${parts.join(', ')})` : ''
-    console.log(`\n📊 批量进度: ${bar} ${bpCompleted}/${total}${suffix}\n`)
+    console.log(`\n📊 批量进度: ${bar} ${completed}/${total}${suffix}\n`)
   }
 
   steps.forEach((step, i) => {
@@ -521,116 +524,103 @@ async function resetStage(pm, progress, stageName, cwd) {
  */
 async function runAutoMode(pm, progress, cwd, flags) {
   const flowStages = ['brainstorm', 'plan', 'execute', 'verify']
+  const isDone = flags.includes('--done')
+  const outputIdx = flags.indexOf('--output')
+  const outputText = outputIdx !== -1 && flags[outputIdx + 1] ? flags[outputIdx + 1] : null
+  const inputIdx = flags.indexOf('--input')
+  const inputText = inputIdx !== -1 && flags[inputIdx + 1] ? flags[inputIdx + 1] : null
   const nextInFlow = (stage) => {
     const i = flowStages.indexOf(stage)
     return i >= 0 && i < flowStages.length - 1 ? flowStages[i + 1] : null
   }
-  const isDone = flags.includes('--done')
-  let outputText = null
-  const outputIdx = flags.indexOf('--output')
-  if (outputIdx !== -1 && flags[outputIdx + 1]) outputText = flags[outputIdx + 1]
-  let inputText = null
-  const inputIdx = flags.indexOf('--input')
-  if (inputIdx !== -1 && flags[inputIdx + 1]) inputText = flags[inputIdx + 1]
+  const firstOpenStage = () => flowStages.find(s => progress.stages?.[s]?.status !== 'completed')
+  const ensureAutoStage = async (stage) => {
+    const stageChanged = progress.currentStage !== stage
+    progress.currentStage = stage
+    const changed = await ensureStageSteps(progress, stage, cwd)
+    if (stageChanged || changed) pm._write(cwd, progress)
+    progress = pm.read(cwd)
+    return progress
+  }
+
+  let currentStage = progress.currentStage
+  if (!currentStage || progress.stages?.[currentStage]?.status === 'completed') {
+    currentStage = firstOpenStage()
+  }
+  if (!currentStage) {
+    console.log('All auto flow stages are complete.')
+    return
+  }
+  if (!flowStages.includes(currentStage)) {
+    console.error(`current stage ${currentStage} is not in auto flow`)
+    process.exit(1)
+  }
+  await ensureAutoStage(currentStage)
 
   if (!isDone) {
-    // 首次启动：显示当前状态和下一步
-    const currentStage = progress.currentStage || flowStages[0]
-    const stageIdx = flowStages.indexOf(currentStage)
-    if (stageIdx === -1) {
-      console.error(`❌ 当前阶段 ${currentStage} 不在 auto 流程中`)
-      console.error(`auto 流程: ${flowStages.join(' → ')}`)
-      process.exit(1)
-    }
-    // 显示进度概览
     console.log('════════════════════════════════════════')
-    console.log('  🤖 SillySpec Auto Mode')
+    console.log('  SillySpec Auto Mode')
     console.log('════════════════════════════════════════')
-    console.log(`  流程: ${flowStages.join(' → ')}`)
-    console.log(`  当前: ${currentStage}`)
-    for (let i = 0; i < flowStages.length; i++) {
-      const s = flowStages[i]
-      const stageData = progress.stages[s]
-      const done = stageData?.status === 'completed'
-      const active = s === currentStage
+    console.log(`  Flow: ${flowStages.join(' -> ')}`)
+    console.log(`  Current: ${currentStage}`)
+    for (const stage of flowStages) {
+      const stageData = progress.stages?.[stage]
       const total = stageData?.steps?.length || '?'
-      const completed = stageData?.steps?.filter(st => st.status === 'completed').length || 0
-      const icon = done ? '✅' : active ? '🔵' : '⬜'
-      console.log(`  ${icon} ${s} (${completed}/${total})`)
+      const completed = stageData?.steps?.filter(step => step.status === 'completed').length || 0
+      const marker = stageData?.status === 'completed' ? 'done' : stage === currentStage ? 'active' : 'pending'
+      console.log(`  ${marker} ${stage} (${completed}/${total})`)
     }
     console.log('')
-    // 输出当前步骤 prompt
-    const steps = await getStageSteps(currentStage, cwd, progress)
-    if (!steps) {
-      console.error(`❌ 无法获取 ${currentStage} 步骤`)
-      process.exit(1)
-    }
-    const pendingIdx = steps.findIndex(s => s.status === 'pending')
+
+    const defSteps = await getStageSteps(currentStage, cwd, progress)
+    const pendingIdx = progress.stages[currentStage]?.steps?.findIndex(step => step.status === 'pending') ?? -1
     if (pendingIdx === -1) {
-      // 阶段已完成，提示进入下一阶段
       const next = nextInFlow(currentStage)
-      if (next) {
-        console.log(`✅ ${currentStage} 已完成，下一步：sillyspec run auto --done --output "${currentStage} 完成"`)
-      } else {
-        console.log('🎉 全部流程已完成！')
-      }
+      if (next) console.log(`${currentStage} is complete. Run: sillyspec run auto --done --output "${currentStage} complete"`)
+      else console.log('All auto flow stages are complete.')
       return
     }
-    outputStep(currentStage, pendingIdx, steps, cwd)
+    outputStep(currentStage, pendingIdx, defSteps, cwd)
     return
   }
 
-  // --done：完成当前步骤，如果阶段完成则自动推进
   if (!outputText) {
-    console.error('❌ auto --done 需要 --output 参数')
+    console.error('auto --done requires --output')
     process.exit(1)
   }
 
-  const currentStage = progress.currentStage
-  const stageIdx = flowStages.indexOf(currentStage)
-  if (stageIdx === -1) {
-    console.error(`❌ 当前阶段 ${currentStage} 不在 auto 流程中`)
-    process.exit(1)
+  const result = await completeStep(pm, progress, currentStage, cwd, outputText, inputText, { printNext: false })
+  if (!result) return
+  progress = pm.read(cwd)
+
+  const nextPendingIdx = progress.stages[currentStage]?.steps?.findIndex(step => step.status === 'pending') ?? -1
+  if (nextPendingIdx !== -1) {
+    const defSteps = await getStageSteps(currentStage, cwd, progress)
+    outputStep(currentStage, nextPendingIdx, defSteps, cwd)
+    return
   }
 
-  // 完成当前步骤
-  await completeStep(pm, progress, currentStage, cwd, outputText, inputText)
-
-  // 检查阶段是否完成
-  const nextPendingIdx = progress.stages[currentStage]?.steps?.findIndex(s => s.status === 'pending')
-  if (nextPendingIdx === -1) {
-    // 阶段已完成 — auto 模式下显式推进 currentStage
-    const next = nextInFlow(currentStage)
-    if (next) {
-      progress.currentStage = next
-      if (!progress.stages[next]) progress.stages[next] = { status: 'pending', steps: [], startedAt: null, completedAt: null }
-      if (progress.stages[next].status === 'pending' || !progress.stages[next].status) {
-        progress.stages[next].status = 'in-progress'
-        progress.stages[next].startedAt = new Date().toLocaleString('zh-CN',{hour12:false})
-      }
-      progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-      pm._write(cwd, progress)
-
-      console.log(`\n✅ ${currentStage} 阶段完成，自动进入 ${next}`)
-      // 输出下一阶段第一步 prompt
-      const nextSteps = await getStageSteps(next, cwd, progress)
-      if (nextSteps) {
-        const firstPending = nextSteps.findIndex(s => s.status === 'pending')
-        if (firstPending !== -1) {
-          outputStep(next, firstPending, nextSteps, cwd)
-        }
-      }
-    } else {
-      console.log('\n🎉 全部流程已完成！建议运行 /sillyspec:commit 提交改动')
-    }
-  } else {
-    // 阶段内下一步
-    const steps = await getStageSteps(currentStage, cwd, progress)
-    if (steps) {
-      const firstPending = steps.findIndex(s => s.status === 'pending')
-      if (firstPending !== -1) {
-        outputStep(currentStage, firstPending, steps, cwd)
-      }
-    }
+  const next = nextInFlow(currentStage)
+  if (!next) {
+    console.log('\nAll auto flow stages are complete.')
+    return
   }
+
+  progress.currentStage = next
+  if (!progress.stages[next]) {
+    progress.stages[next] = { status: 'pending', steps: [], startedAt: null, completedAt: null }
+  }
+  if (progress.stages[next].status === 'pending' || !progress.stages[next].status) {
+    progress.stages[next].status = 'in-progress'
+    progress.stages[next].startedAt = new Date().toLocaleString('zh-CN',{hour12:false})
+  }
+  progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
+  await ensureStageSteps(progress, next, cwd)
+  pm._write(cwd, progress)
+  progress = pm.read(cwd)
+
+  console.log(`\n${currentStage} complete. Auto advanced to ${next}.`)
+  const nextSteps = await getStageSteps(next, cwd, progress)
+  const firstPending = progress.stages[next]?.steps?.findIndex(step => step.status === 'pending') ?? -1
+  if (firstPending !== -1) outputStep(next, firstPending, nextSteps, cwd)
 }

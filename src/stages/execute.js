@@ -128,7 +128,9 @@ function parseWavesFromPlan(planContent) {
 
     const taskMatch = line.match(/^[-*]\s*\[[ x]\]\s*(.+)/)
     if (taskMatch) {
+      const taskNoMatch = taskMatch[1].match(/\btask-(\d+)\b/i)
       currentTask = {
+        index: taskNoMatch ? parseInt(taskNoMatch[1], 10) : null,
         name: taskMatch[1].trim(),
         file: '',
         steps: '',

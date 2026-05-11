@@ -1,7 +1,7 @@
 import { createServer } from 'http'
 import { WebSocketServer } from 'ws'
 import { existsSync, readFileSync, readdirSync, realpathSync, watch } from 'fs'
-import { join, dirname, basename, sep, resolve } from 'path'
+import { join, dirname, basename, sep, resolve, relative } from 'path'
 import { fileURLToPath } from 'url'
 import { homedir } from 'os'
 import open from 'open'
@@ -14,6 +14,31 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 // WebSocket clients and active processes
 let wss = null
 const activeProcesses = new Map()
+const allowedStages = new Set(['brainstorm', 'plan', 'execute', 'verify', 'scan', 'quick', 'archive', 'status', 'doctor', 'auto'])
+
+function isAllowedCliCommand(command) {
+  const args = String(command || '').trim().split(/\s+/).filter(Boolean)
+  if (args.length === 0) return false
+  if (args[0] === 'run') {
+    if (!allowedStages.has(args[1])) return false
+    const allowedFlags = new Set(['--status', '--reset', '--done', '--skip', '--output', '--input', '--change'])
+    for (let i = 2; i < args.length; i++) {
+      if (args[i].startsWith('-') && !allowedFlags.has(args[i])) return false
+      if (['--output', '--input', '--change'].includes(args[i])) i++
+    }
+    return true
+  }
+  if (args[0] === 'progress') {
+    const sub = args[1]
+    if (!['show', 'status', 'validate', 'reset'].includes(sub)) return false
+    for (let i = 2; i < args.length; i++) {
+      if (!['--stage', '--deep'].includes(args[i])) return false
+      if (args[i] === '--stage') i++
+    }
+    return true
+  }
+  return false
+}
 
 // Progress file watchers: projectPath -> { watcher, timer, refCount }
 const progressWatchers = new Map()
@@ -65,6 +90,29 @@ function broadcast(data) {
       client.send(message)
     }
   })
+}
+
+function isInside(parent, child) {
+  const rel = relative(resolve(parent), resolve(child))
+  return rel === '' || (!!rel && !rel.startsWith('..') && !rel.includes(`..${sep}`))
+}
+
+function isSillyspecDocsPath(filePath) {
+  const parts = resolve(filePath).split(/[\\/]+/)
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (parts[i] === '.sillyspec' && parts[i + 1] === 'docs') return true
+  }
+  return false
+}
+
+function isLocalOrigin(origin) {
+  if (!origin) return true
+  try {
+    const { hostname } = new URL(origin)
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
+  } catch {
+    return false
+  }
 }
 
 // --- Shared scan logic (aligned with watcher.js) ---
@@ -178,6 +226,14 @@ function handleCliExecute(ws, data) {
     return
   }
 
+  if (!isAllowedCliCommand(command)) {
+    ws.send(JSON.stringify({
+      type: 'cli:error',
+      data: { message: `Command not allowed: ${command}` }
+    }))
+    return
+  }
+
   discoverProjects().then(projects => {
     const project = projects.find(p => p.name === projectName)
     if (!project) {
@@ -221,7 +277,14 @@ function handleCliExecute(ws, data) {
  */
 function startServer({ port = 3456, open: openBrowser = true } = {}) {
   const server = createServer((req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*')
+    const origin = req.headers.origin
+    if (!isLocalOrigin(origin)) {
+      res.writeHead(403)
+      res.end('Forbidden')
+      return
+    }
+    res.setHeader('Access-Control-Allow-Origin', origin || `http://127.0.0.1:${port}`)
+    res.setHeader('Vary', 'Origin')
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
@@ -310,9 +373,9 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
         res.end(JSON.stringify({ error: 'Missing path parameter' }))
         return
       }
-      // Security: only allow reading files under .sillyspec/docs/
+      // Security: only allow reading files under a .sillyspec/docs/ tree.
       const normalizedPath = resolve(filePath)
-      if (!normalizedPath.includes('.sillyspec' + sep + 'docs')) {
+      if (!isSillyspecDocsPath(normalizedPath)) {
         res.writeHead(403)
         res.end(JSON.stringify({ error: 'Access denied' }))
         return
@@ -353,8 +416,15 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
     const distDir = join(__dirname, '../dist')
     const indexPath = join(distDir, 'index.html')
     if (existsSync(distDir)) {
-      const filePath = join(distDir, req.url === '/' ? 'index.html' : req.url.replace(/^\//, ''))
-      if (existsSync(filePath) && !filePath.includes('..')) {
+      const url = new URL(req.url || '/', `http://${req.headers.host}`)
+      const requestPath = decodeURIComponent(url.pathname)
+      const filePath = resolve(distDir, requestPath === '/' ? 'index.html' : `.${requestPath}`)
+      if (!isInside(distDir, filePath)) {
+        res.writeHead(403)
+        res.end('Access denied')
+        return
+      }
+      if (existsSync(filePath)) {
         const ext = filePath.split('.').pop()
         const mimeTypes = { html: 'text/html', js: 'application/javascript', css: 'text/css', svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg' }
         res.setHeader('Content-Type', mimeTypes[ext] || 'application/octet-stream')
@@ -380,7 +450,11 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
     console.error('WebSocket server error:', err)
   })
 
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws, req) => {
+    if (!isLocalOrigin(req.headers.origin)) {
+      ws.close(1008, 'Forbidden origin')
+      return
+    }
     console.log('WebSocket client connected')
 
     // Send initial projects list
@@ -485,10 +559,10 @@ function startServer({ port = 3456, open: openBrowser = true } = {}) {
     console.error('Failed to start file watcher:', err)
   }
 
-  server.listen(port, () => {
-    console.log(`Dashboard server running on http://localhost:${port}`)
+  server.listen(port, '127.0.0.1', () => {
+    console.log(`Dashboard server running on http://127.0.0.1:${port}`)
     if (openBrowser) {
-      open(`http://localhost:${port}`)
+      open(`http://127.0.0.1:${port}`)
     }
   })
 

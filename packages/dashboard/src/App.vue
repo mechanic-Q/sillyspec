@@ -259,8 +259,13 @@ function handleSelectDocFile(file) {
 function handleExecute() {
   const projectName = dashboard.activeProjectName.value
   if (!projectName) return
+  const progress = dashboard.state.activeProject?.state?.progress
+  const stages = ['brainstorm', 'plan', 'execute', 'verify']
+  const currentStage = dashboard.state.activeProject?.state?.currentStage
+    || stages.find(stage => progress?.stages?.[stage]?.status !== 'completed')
+    || 'brainstorm'
   dashboard.clearLogs()
-  ws.send({ type: 'cli:execute', data: { projectName, command: 'next' } })
+  ws.send({ type: 'cli:execute', data: { projectName, command: `run ${currentStage}` } })
 }
 function handleKill() {
   const projectName = dashboard.activeProjectName.value
