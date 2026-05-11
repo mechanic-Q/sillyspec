@@ -24,6 +24,10 @@ SillySpec CLI — 规范驱动开发工具包
     [--dir <path>]             指定目录
   sillyspec setup [--list]     安装推荐 MCP 工具
     [--list]                   查看已安装状态
+  sillyspec step <phase>         步骤调度器
+    [--next] [--status] [--list] [--jump <n>]
+    [--sessions] [--clean]
+    [--session <id>] [--json]
   sillyspec dashboard          启动 Dashboard Web UI
     [--port <number>]          指定端口（默认 3456）
     [--no-open]                不自动打开浏览器
@@ -100,6 +104,12 @@ async function main() {
       const setupList = filteredArgs.includes('--list') || filteredArgs.includes('-l');
       await (await import('./setup.js')).cmdSetup(dir, { json, list: setupList });
       break;
+    case 'step': {
+      const stepArgs = filteredArgs.slice(1);
+      if (json) stepArgs.push('--json');
+      await (await import('./step.js')).cmdStep(dir, stepArgs);
+      break;
+    }
     case 'progress':
       console.log('⚠️  阶段控制功能已移除，各阶段独立运行。');
       break;
