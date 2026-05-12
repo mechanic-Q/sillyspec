@@ -18,9 +18,10 @@ description: 自动判断并执行下一步
    2a. 没有任何文件 → 提示检查 proposal 是否需要完善
    2b. 没有 design.md → 提示补充 design
    2c. 没有 tasks.md → 执行 /sillyspec:propose（补全规范）
-   2d. tasks.md 有未完成项 + 有计划文件 → 执行 /sillyspec:execute
-   2e. tasks.md 全完成 + 没验证 → 执行 /sillyspec:verify
-   2f. 已验证通过 → 执行 /sillyspec:archive
+   2d. 有 tasks.md 但没有 plan.md → 执行 /sillyspec:plan
+   2e. tasks.md 有未完成项 + 有计划文件 → 执行 /sillyspec:execute
+   2f. tasks.md 全完成 + 没验证 → 执行 /sillyspec:verify
+   2g. 已验证通过 → 执行 /sillyspec:archive
 
 3. 有设计文档但没有对应变更？
    → 提示运行 /sillyspec:propose <name>

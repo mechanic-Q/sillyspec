@@ -1,4 +1,5 @@
 ---
+name: sillyspec:commit
 description: 智能提交 — 自动收集变更信息，生成 commit message
 argument-hint: "[可选：自定义 commit message]"
 version: "3.7.32"
@@ -69,7 +70,7 @@ cat "$LATEST/tasks.md" 2>/dev/null
 | 混合来源 | 取最主要的 type | body 里列出所有条目 |
 | 无匹配来源 | — | 展示 diff stat，让用户自己写 |
 
-**如果 $ARGUMENTS 非空**，直接使用用户指定的 message，跳过自动生成。
+**如果 $ARGUMENTS 非空**，直接使用用户指定的 message，跳过自动生成，但仍展示 diff stat。
 
 多条 quick 合并规则：
 - 2 条以内 → 逐条列出
@@ -102,4 +103,4 @@ git commit -m "{确认后的 message}"
 ## 绝对规则
 - ❌ 不要自动提交，必须展示 message 让用户确认
 - ❌ 不要丢弃用户的修改
-- ✅ $ARGUMENTS 非空时可跳过确认直接提交
+- ✅ $ARGUMENTS 非空时展示 diff stat 后直接提交（不需手动确认）

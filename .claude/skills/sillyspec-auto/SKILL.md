@@ -1,4 +1,5 @@
 ---
+name: sillyspec:auto
 description: 自动模式 — 全流程自动推进（通用版）
 argument-hint: "<需求描述>"
 ---
@@ -35,7 +36,7 @@ $ARGUMENTS
 ### 阶段审核门控
 
 **brainstorm 完成后：**
-评估需求复杂度（参考 brainstorm Step 5 的判断结果），根据复杂度决定：
+评估需求复杂度（基于 design.md 中的模块拆分、批量操作、多角色交互等特征），根据复杂度决定：
 
 | 复杂度 | 审核策略 |
 |--------|---------|

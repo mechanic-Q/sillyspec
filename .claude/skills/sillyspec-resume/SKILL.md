@@ -60,7 +60,7 @@ sillyspec progress show 2>/dev/null
 ls .sillyspec/changes/*/MASTER.md 2>/dev/null
 
 # 检查活跃变更
-ls .d .sillyspec/changes/*/ | grep -v archive | grep -v stages | tail -1 2>/dev/null
+ls -d .sillyspec/changes/*/ | grep -v archive | grep -v stages | tail -1 2>/dev/null
 
 # 检查子阶段
 ls .sillyspec/changes/*/stages/*/proposal.md 2>/dev/null
