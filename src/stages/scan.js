@@ -10,8 +10,8 @@ export const definition = {
 
 ### 操作
 1. \`ls .sillyspec/projects/*.yaml 2>/dev/null | grep -q .\` — 检查已有文档
-1. \`ls docs/*/scan/ 2>/dev/null\` — 检查已有文档
-2. \`wc -l docs/*/scan/*.md 2>/dev/null\` — 文档行数
+1. \`ls .sillyspec/docs/*/scan/ 2>/dev/null\` — 检查已有文档
+2. \`wc -l .sillyspec/docs/*/scan/*.md 2>/dev/null\` — 文档行数
 3. 已有 3 份 → 建议升级深度扫描；已有 7 份 → 建议刷新或跳过
 5. 显示子项目列表供选择扫描范围
 
@@ -27,7 +27,7 @@ export const definition = {
 ### 操作
 1. \`cat package.json pom.xml build.gradle go.mod Cargo.toml requirements.txt pyproject.toml Gemfile composer.json 2>/dev/null\`
 2. \`find . -maxdepth 2 -name "*.config.*" -not -path "*/node_modules/*" -not -path "*/.git/*" | head -20 | xargs cat 2>/dev/null\`
-3. 结果保存到 \`docs/<project>/scan/_env-detect.md\`（临时文件，扫描完删除）
+3. 结果保存到 \`.sillyspec/docs/<project>/scan/_env-detect.md\`（临时文件，扫描完删除）
 
 ### 输出
 环境探测结果摘要`,
@@ -56,7 +56,7 @@ export const definition = {
 ### 操作
 1. 用 grep/rg 搜索（\`@Entity\`、\`schema.prisma\`、\`models.py\` 等），**禁止读源码全文**
 2. Schema 只记表名+说明+字段数
-3. 写入 \`docs/<project>/scan/ARCHITECTURE.md\`
+3. 写入 \`.sillyspec/docs/<project>/scan/ARCHITECTURE.md\`
 4. 包含 \`## 技术栈\` \`## 架构概览\` \`## 数据模型（摘要）\`
 
 ### 输出
@@ -75,7 +75,7 @@ ARCHITECTURE.md 路径
 1. 用 grep 搜索拦截器/插件/逻辑删除/基类/审计字段，**禁止读源码全文**
 2. 根据检测到的语言/框架自行决定搜索什么模式
 3. 提取 3-5 个典型示例
-4. 写入 \`docs/<project>/scan/CONVENTIONS.md\`
+4. 写入 \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\`
 5. 包含 \`## 框架隐形规则\` \`## 实体继承规范\` \`## 代码风格\`
 
 ### 输出
@@ -93,8 +93,8 @@ CONVENTIONS.md 路径
 ### 操作
 1. 用 find/ls/tree 和 grep，**禁止读源码全文**
 2. 搜索 API 调用、MQ 配置、缓存、第三方 SDK
-3. 写入 \`docs/<project>/scan/STRUCTURE.md\`（目录树+模块说明）
-4. 写入 \`docs/<project>/scan/INTEGRATIONS.md\`（按类型分组）
+3. 写入 \`.sillyspec/docs/<project>/scan/STRUCTURE.md\`（目录树+模块说明）
+4. 写入 \`.sillyspec/docs/<project>/scan/INTEGRATIONS.md\`（按类型分组）
 
 ### 输出
 STRUCTURE.md 和 INTEGRATIONS.md 路径
@@ -110,9 +110,9 @@ STRUCTURE.md 和 INTEGRATIONS.md 路径
 
 ### 操作
 1. 用 grep 搜索测试文件、TODO/FIXME、过时依赖，**禁止读源码全文**
-2. 写入 \`docs/<project>/scan/TESTING.md\`（测试结构）
-3. 写入 \`docs/<project>/scan/CONCERNS.md\`（按严重程度分组）
-4. 写入 \`docs/<project>/scan/PROJECT.md\`（项目信息）
+2. 写入 \`.sillyspec/docs/<project>/scan/TESTING.md\`（测试结构）
+3. 写入 \`.sillyspec/docs/<project>/scan/CONCERNS.md\`（按严重程度分组）
+4. 写入 \`.sillyspec/docs/<project>/scan/PROJECT.md\`（项目信息）
 
 ### 输出
 TESTING.md、CONCERNS.md、PROJECT.md 路径`,
@@ -126,7 +126,7 @@ TESTING.md、CONCERNS.md、PROJECT.md 路径`,
 ### 操作
 1. 检查 7 份文档是否全部生成
 2. 自检门控：ARCHITECTURE（技术栈+Schema摘要）、CONVENTIONS（隐形规则+代码风格）、STRUCTURE（目录结构）、INTEGRATIONS（外部依赖）、TESTING（测试现状）、CONCERNS（技术债务）、PROJECT（项目概览）
-3. 清理：\`rm -f docs/<project>/scan/_env-detect.md\`
+3. 清理：\`rm -f .sillyspec/docs/<project>/scan/_env-detect.md\`
 4. \`git add .\` — **不要 commit**，由用户通过统一提交工具处理
 
 ### 输出

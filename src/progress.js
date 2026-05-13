@@ -14,7 +14,7 @@ const PROGRESS_FILE = 'progress.json';
 const BACKUP_FILE = 'progress.json.bak';
 
 const CURRENT_VERSION = 2;
-const VALID_STAGES = ['brainstorm', 'plan', 'execute', 'verify', 'scan', 'quick', 'archive'];
+const VALID_STAGES = ['scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore'];
 const VALID_STATUSES = ['pending', 'in-progress', 'completed', 'failed', 'blocked'];
 
 const STAGE_LABELS = {
@@ -24,6 +24,7 @@ const STAGE_LABELS = {
   verify: '🔍 验证确认',
   scan: '🔍 代码扫描',
   quick: '⚡ 快速任务',
+  explore: '🧭 自由探索',
   archive: '📦 归档变更',
 };
 

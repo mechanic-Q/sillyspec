@@ -3,7 +3,7 @@ import { basename, join, resolve } from 'path';
 import chalk from 'chalk';
 
 /**
- * Migrate old .sillyspec/ structure to unified docs/<project>/ structure
+ * Migrate old .sillyspec/ structure to unified .sillyspec/docs/<project>/ structure
  * @param {string} projectDir - Path to the project directory
  */
 export function migrateDocs(projectDir) {
@@ -29,7 +29,7 @@ export function migrateDocs(projectDir) {
   const docsBase = join(sillyspecDir, 'docs', projectName);
   let migrated = 0;
 
-  // 1. codebase/ → docs/<project>/scan/
+  // 1. codebase/ → .sillyspec/docs/<project>/scan/
   const codebaseDir = join(sillyspecDir, 'codebase');
   if (existsSync(codebaseDir)) {
     const targetDir = join(docsBase, 'scan');
@@ -50,7 +50,7 @@ export function migrateDocs(projectDir) {
 
   // 2. specs/ is deprecated — designs live in changes/<变更名>/design.md
 
-  // 3. changes/archive/ → docs/<project>/archive/
+  // 3. changes/archive/ → .sillyspec/docs/<project>/archive/
   const archiveDir = join(sillyspecDir, 'changes', 'archive');
   if (existsSync(archiveDir)) {
     const targetDir = join(docsBase, 'archive');
@@ -69,7 +69,7 @@ export function migrateDocs(projectDir) {
     }
   }
 
-  // 4. knowledge/ → docs/<project>/archive/ (append knowledge files)
+  // 4. knowledge/ → .sillyspec/docs/<project>/archive/ (append knowledge files)
   const knowledgeDir = join(sillyspecDir, 'knowledge');
   if (existsSync(knowledgeDir)) {
     const targetDir = join(docsBase, 'archive');
@@ -88,7 +88,7 @@ export function migrateDocs(projectDir) {
     }
   }
 
-  // 5. quicklog/ → docs/<project>/quicklog/
+  // 5. quicklog/ → .sillyspec/docs/<project>/quicklog/
   const quicklogDir = join(sillyspecDir, 'quicklog');
   if (existsSync(quicklogDir)) {
     const targetDir = join(docsBase, 'quicklog');

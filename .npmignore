@@ -1,0 +1,7 @@
+.idea/
+.sillyspec/
+docs/sillyspec/scan/
+node_modules/
+packages/dashboard/node_modules/
+*.tgz
+.npm-publish-token

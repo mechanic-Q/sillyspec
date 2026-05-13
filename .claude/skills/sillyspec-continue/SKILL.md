@@ -26,7 +26,7 @@ description: 自动判断并执行下一步
 3. 有设计文档但没有对应变更？
    → 提示运行 /sillyspec:propose <name>
 
-4. 有 docs/*/scan/ 但没有进行中的工作？
+4. 有 .sillyspec/docs/*/scan/ 但没有进行中的工作？
    → 提示运行 /sillyspec:brainstorm "你的想法"
 
 5. 什么都没有？

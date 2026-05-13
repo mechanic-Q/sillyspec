@@ -199,10 +199,14 @@ const currentStageLabel = computed(() => {
   const stage = activeProject.value?.state?.currentStage
   if (!stage) return '未开始'
   const stageNames = {
+    scan: '代码扫描',
     brainstorm: '需求探索',
     plan: '实现计划',
     execute: '波次执行',
-    verify: '验证确认'
+    verify: '验证确认',
+    archive: '归档变更',
+    quick: '快速任务',
+    explore: '自由探索'
   }
   return stageNames[stage] || stage
 })
@@ -389,10 +393,10 @@ function handleExecute() {
   const projectName = dashboard.activeProjectName.value
   if (!projectName) return
   const progress = dashboard.state.activeProject?.state?.progress
-  const stages = ['brainstorm', 'plan', 'execute', 'verify']
+  const stages = ['scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive']
   const currentStage = dashboard.state.activeProject?.state?.currentStage
     || stages.find(stage => progress?.stages?.[stage]?.status !== 'completed')
-    || 'brainstorm'
+    || 'scan'
   dashboard.clearLogs()
   ws.send({ type: 'cli:execute', data: { projectName, command: `run ${currentStage}` } })
 }

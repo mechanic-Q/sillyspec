@@ -78,7 +78,16 @@ function getProjectStatus() {
 
 function stageLabel() {
   const stage = props.project?.state?.currentStage
-  const labels = { 'brainstorm': '头脑风暴', 'plan': '规划', 'execute': '执行', 'verify': '验证' }
+  const labels = {
+    scan: '代码扫描',
+    brainstorm: '头脑风暴',
+    plan: '规划',
+    execute: '执行',
+    verify: '验证',
+    archive: '归档',
+    quick: '快速任务',
+    explore: '自由探索'
+  }
   return labels[stage] || stage || '未知'
 }
 </script>

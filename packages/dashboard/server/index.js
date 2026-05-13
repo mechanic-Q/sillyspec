@@ -14,7 +14,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 // WebSocket clients and active processes
 let wss = null
 const activeProcesses = new Map()
-const allowedStages = new Set(['brainstorm', 'plan', 'execute', 'verify', 'scan', 'quick', 'archive', 'status', 'doctor', 'auto'])
+const allowedStages = new Set(['brainstorm', 'plan', 'execute', 'verify', 'scan', 'quick', 'explore', 'archive', 'status', 'doctor', 'auto'])
 
 function isAllowedCliCommand(command) {
   const args = String(command || '').trim().split(/\s+/).filter(Boolean)

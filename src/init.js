@@ -119,7 +119,7 @@ async function doInstall(projectDir, tools, subprojects = []) {
     writeFileSync(projectYamlPath, `name: ${projectName}\npath: .\nstatus: active\n`);
   }
 
-  // 创建 docs/<projectName>/scan/ 子目录（代码扫描结果）
+  // 创建 .sillyspec/docs/<projectName>/scan/ 子目录（代码扫描结果）
   const scanDir = join(projectDir, '.sillyspec', 'docs', projectName, 'scan');
   mkdirSync(scanDir, { recursive: true });
   const gitkeepPath = join(scanDir, '.gitkeep');

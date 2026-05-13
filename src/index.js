@@ -34,6 +34,10 @@ SillySpec CLI — 规范驱动开发工具包
     --change <name>            设置当前变更名
     auto                       连续推进 brainstorm→plan→execute→verify
 
+  可选阶段:
+    scan, brainstorm, plan, execute, verify, archive
+    quick, explore, status, doctor
+
   sillyspec progress <cmd>     进度记录（轻量，不强制顺序）
     init                       初始化 progress.json
     show                       查看当前进度
@@ -56,7 +60,10 @@ SillySpec CLI — 规范驱动开发工具包
 
 示例:
   sillyspec init
+  sillyspec run scan
   sillyspec run brainstorm
+  sillyspec run quick
+  sillyspec run explore
   sillyspec run brainstorm --done --output "需求已澄清"
   sillyspec setup --list
   sillyspec dashboard --port 8080 --no-open

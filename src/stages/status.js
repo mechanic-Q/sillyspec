@@ -11,7 +11,7 @@ export const definition = {
 ### 操作
 1. \`cat .sillyspec/PROJECT.md 2>/dev/null || echo "未初始化"\`
 2. 获取 project 名
-3. \`ls docs/<project>/scan/ 2>/dev/null | head -10\`
+3. \`ls .sillyspec/docs/<project>/scan/ 2>/dev/null | head -10\`
 4. \`cat .sillyspec/REQUIREMENTS.md 2>/dev/null | head -20\`
 5. \`cat .sillyspec/ROADMAP.md 2>/dev/null\`
 

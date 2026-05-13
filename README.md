@@ -2,7 +2,7 @@
   <img src="logo.jpg" width="80" />
 </p>
 
-# SillySpec v3.0 — 规范驱动开发工具包
+# SillySpec v3.9 — 规范驱动开发工具包
 
 > 融合 Superpowers + OpenSpec + GSD，从"你说要啥"到"代码能跑"的完整流程。
 > Claude Code / Cursor / Codex / OpenCode / OpenClaw 都能用。
@@ -68,7 +68,7 @@ claude --dangerously-skip-permissions
 
 ```
 绿地：init → brainstorm → plan → execute → [verify] → archive
-棕地：scan → brainstorm → plan → execute → [verify] → archive
+棕地：scan → brainstorm → plan → execute → verify → archive
 大模块：brainstorm(多图) → 拆分 → MASTER.md → stage-1 全流程 → stage-2 全流程 → ... → archive
 ```
 
@@ -111,6 +111,9 @@ claude --dangerously-skip-permissions
 
 ```bash
 sillyspec run <stage>        执行阶段步骤（brainstorm/plan/execute/verify 等）
+sillyspec run scan           代码扫描
+sillyspec run quick          快速任务
+sillyspec run explore        自由探索
 sillyspec run <stage> --done 完成当前步骤并输出下一步
 sillyspec run <stage> --status 查看阶段进度
 sillyspec progress show      显示当前项目状态

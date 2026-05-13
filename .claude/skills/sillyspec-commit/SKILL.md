@@ -50,7 +50,7 @@ cat "$LATEST/tasks.md" 2>/dev/null
 
 来源 C — 阶段产出（scan/brainstorm/plan/archive 等）：
 检查 .sillyspec/ 下新增或修改的文件，根据路径识别来源阶段：
-- docs/<project>/scan/*.md → scan 产出
+- .sillyspec/docs/<project>/scan/*.md → scan 产出
 - changes/<name>/design.md → brainstorm 产出
 - changes/<name>/proposal.md → brainstorm 产出
 - changes/<name>/tasks.md → plan 产出

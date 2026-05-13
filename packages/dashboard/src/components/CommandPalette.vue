@@ -58,10 +58,14 @@ const searchInput = ref(null)
 const selectedIndex = ref(0)
 
 const stageNames = [
+  { id: 'scan', name: '代码扫描' },
   { id: 'brainstorm', name: '头脑风暴' },
   { id: 'plan', name: '规划' },
   { id: 'execute', name: '执行' },
-  { id: 'verify', name: '验证' }
+  { id: 'verify', name: '验证' },
+  { id: 'archive', name: '归档' },
+  { id: 'quick', name: '快速任务' },
+  { id: 'explore', name: '自由探索' }
 ]
 
 const filteredItems = computed(() => {

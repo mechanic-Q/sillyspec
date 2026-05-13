@@ -26,6 +26,8 @@
 
       <!-- Stages -->
       <div v-else class="flex-1 overflow-y-auto px-6 pb-5 space-y-5">
+        <PipelineStage name="scan" title="代码扫描" :steps="getStageSteps('scan')" :status="getStageStatus('scan')" :is-active="currentStage === 'scan'" :active-step="activeStep" @select-step="handleSelectStep" />
+        <div v-if="hasStage('brainstorm')" class="flex items-center pl-[3px]"><div class="w-px h-4" style="background: #F0F0F3;" /></div>
         <PipelineStage name="brainstorm" title="头脑风暴" :steps="getStageSteps('brainstorm')" :status="getStageStatus('brainstorm')" :is-active="currentStage === 'brainstorm'" :active-step="activeStep" @select-step="handleSelectStep" />
         <div v-if="hasStage('plan')" class="flex items-center pl-[3px]"><div class="w-px h-4" style="background: #F0F0F3;" /></div>
         <PipelineStage name="plan" title="规划" :steps="getStageSteps('plan')" :status="getStageStatus('plan')" :is-active="currentStage === 'plan'" :active-step="activeStep" @select-step="handleSelectStep" />
@@ -33,6 +35,8 @@
         <PipelineStage name="execute" title="执行" :steps="getStageSteps('execute')" :status="getStageStatus('execute')" :is-active="currentStage === 'execute'" :active-step="activeStep" @select-step="handleSelectStep" />
         <div v-if="hasStage('verify')" class="flex items-center pl-[3px]"><div class="w-px h-4" style="background: #F0F0F3;" /></div>
         <PipelineStage name="verify" title="验证" :steps="getStageSteps('verify')" :status="getStageStatus('verify')" :is-active="currentStage === 'verify'" :active-step="activeStep" @select-step="handleSelectStep" />
+        <div v-if="hasStage('archive')" class="flex items-center pl-[3px]"><div class="w-px h-4" style="background: #F0F0F3;" /></div>
+        <PipelineStage name="archive" title="归档" :steps="getStageSteps('archive')" :status="getStageStatus('archive')" :is-active="currentStage === 'archive'" :active-step="activeStep" @select-step="handleSelectStep" />
       </div>
 
       <!-- Activity Log -->
@@ -96,10 +100,14 @@ const progress = computed(() => props.project?.state?.progress || {})
 const stages = computed(() => progress.value.stages || {})
 
 const stageNameMap = {
+  scan: '代码扫描',
   brainstorm: '头脑风暴',
   plan: '规划',
   execute: '执行',
-  verify: '验证'
+  verify: '验证',
+  archive: '归档',
+  quick: '快速任务',
+  explore: '自由探索'
 }
 
 const activityLogs = computed(() => {

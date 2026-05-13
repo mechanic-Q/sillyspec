@@ -95,7 +95,7 @@ for f in .sillyspec/projects/*.yaml; do
   cd "$proj_path"
   ls .sillyspec/ 2>/dev/null
   cat .sillyspec/PROJECT.md 2>/dev/null
-  ls docs/${proj_name}/scan/ 2>/dev/null | wc -l
+  ls .sillyspec/docs/${proj_name}/scan/ 2>/dev/null | wc -l
   cd -
 done
 ```

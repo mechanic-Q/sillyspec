@@ -1,10 +1,10 @@
 ---
 name: sillyspec
-description: "规范驱动开发工具包 v3.6。绿地项目用 /sillyspec:init，棕地项目用 /sillyspec:scan。可用命令：init、scan、scan-quick、explore、brainstorm、plan、execute、verify、archive、commit、export、status、resume、continue、quick、state、workspace、workspace-sync。"
-version: "3.6.1"
+description: "规范驱动开发工具包 v3.9。绿地项目用 /sillyspec:init，棕地项目用 /sillyspec:scan。主线：scan、brainstorm、plan、execute、verify、archive。辅助：quick、explore、status、doctor、resume、continue、commit、export、workspace。"
+version: "3.9.1"
 ---
 
-# SillySpec v3.6
+# SillySpec v3.9
 
 融合 Superpowers + OpenSpec + GSD，从"你说要啥"到"代码能跑"的完整流程。
 Claude Code / Cursor / Codex / OpenCode / OpenClaw 都能用。
@@ -22,11 +22,11 @@ Claude Code / Cursor / Codex / OpenCode / OpenClaw 都能用。
 
 ```
 绿地：init → brainstorm → plan → execute → [verify] → archive
-棕地：scan → brainstorm → plan → execute → [verify] → archive
+棕地：scan → brainstorm → plan → execute → verify → archive
 工作区：workspace → (init/scan per project) → brainstorm → ...
 ```
 
-## 19 个命令
+## 命令
 
 ### 核心流程
 
@@ -52,16 +52,21 @@ Claude Code / Cursor / Codex / OpenCode / OpenClaw 都能用。
 | `/sillyspec:state` | 查看当前工作状态 |
 | `/sillyspec:commit` | 智能提交 |
 | `/sillyspec:export` | 导出成功方案为可复用模板 |
-| `/sillyspec:scan-quick` | 快速扫描（STACK + STRUCTURE） |
+| `/sillyspec:doctor` | 项目自检 |
 | `/sillyspec:workspace` | 多项目工作区管理 |
-| `/sillyspec:workspace-sync` | 同步工作区子项目状态 |
 
 ## CLI 命令
 
 ```bash
-sillyspec status [--json]    显示当前项目状态
-sillyspec next [--json]      显示下一步命令
-sillyspec check [--json]     检查文档完整性
+sillyspec run scan           执行代码扫描阶段
+sillyspec run brainstorm     执行需求探索阶段
+sillyspec run plan           执行实现计划阶段
+sillyspec run execute        执行开发阶段
+sillyspec run verify         执行验证阶段
+sillyspec run archive        执行归档阶段
+sillyspec run quick          快速任务
+sillyspec run explore        自由探索
+sillyspec progress show      显示当前项目状态
 sillyspec setup              安装推荐 MCP 工具
 sillyspec setup --list       查看已安装 MCP 状态
 sillyspec init               初始化（零交互，自动检测工具）
