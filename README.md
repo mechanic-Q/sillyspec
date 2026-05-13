@@ -42,10 +42,8 @@ npx sillyspec init --dir /path/to/project
 
 | 工具 | `--tool` 参数 | 输出目录 | 格式 |
 |---|---|---|---|
-| Claude Code (commands) | `claude` | `.claude/commands/sillyspec/` | slash commands |
-| Claude Code (skills) | `claude_skills` | `.claude/skills/sillyspec-<name>/` | SKILL.md |
-| Cursor | `cursor` | `.cursor/commands/` | custom commands |
-| Codex | `codex` | `~/.agents/skills/sillyspec-<name>/` | SKILL.md |
+| Claude Code | `claude` | `.claude/skills/sillyspec-<name>/` | SKILL.md |
+| Codex | `codex` | `.codex/skills/sillyspec-<name>/` | SKILL.md |
 | OpenCode | `opencode` | `.opencode/skills/sillyspec-<name>/` | SKILL.md |
 | OpenClaw | `openclaw` | `.openclaw/skills/sillyspec-<name>/` | SKILL.md |
 

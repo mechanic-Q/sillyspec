@@ -27,11 +27,10 @@ function copyDirSync(src, dst) {
 
 
 
-const VALID_TOOLS = ['claude', 'claude_skills', 'cursor', 'openclaw', 'codex', 'gemini', 'opencode'];
+const VALID_TOOLS = ['claude', 'cursor', 'openclaw', 'codex', 'gemini', 'opencode'];
 
 const TOOL_LABELS = {
   claude: 'Claude Code',
-  claude_skills: 'Claude Skills',
   cursor: 'Cursor',
   openclaw: 'OpenClaw',
   codex: 'OpenAI Codex (通过 AGENTS.md)',
@@ -87,7 +86,6 @@ function injectInstructions(tool, projectDir) {
 function detectTools(projectDir) {
   const found = [];
   if (existsSync(join(projectDir, '.claude'))) found.push('claude');
-  if (existsSync(join(projectDir, '.claude', 'skills'))) found.push('claude_skills');
   if (existsSync(join(projectDir, '.cursor'))) found.push('cursor');
   if (existsSync(join(projectDir, '.openclaw'))) found.push('openclaw');
   if (existsSync(join(projectDir, 'AGENTS.md'))) found.push('codex');
@@ -185,17 +183,26 @@ async function doInstall(projectDir, tools, subprojects = []) {
     }
   }
 
-  // 复制 skills 到 .claude/skills/（给 Claude Code 使用）
-  const claudeSkillsDir = join(projectDir, '.claude', 'skills');
+  // 复制 skills 到各工具目录
+  const skillToolDirs = {
+    claude: '.claude/skills',
+    codex: '.codex/skills',
+    openclaw: '.openclaw/skills',
+    opencode: '.opencode/skills',
+  }
   const skillsSource = join(__dirname, '..', '.claude', 'skills');
   if (existsSync(skillsSource)) {
     const sillyspecSkills = readdirSync(skillsSource).filter(f => f.startsWith('sillyspec-') && statSync(join(skillsSource, f)).isDirectory());
     if (sillyspecSkills.length > 0) {
-      mkdirSync(claudeSkillsDir, { recursive: true });
-      for (const skill of sillyspecSkills) {
-        copyDirSync(join(skillsSource, skill), join(claudeSkillsDir, skill));
+      for (const [tool, dir] of Object.entries(skillToolDirs)) {
+        if (!tools.includes(tool)) continue
+        const targetDir = join(projectDir, dir)
+        mkdirSync(targetDir, { recursive: true })
+        for (const skill of sillyspecSkills) {
+          copyDirSync(join(skillsSource, skill), join(targetDir, skill))
+        }
+        console.log(chalk.green(`    ✓ ${TOOL_LABELS[tool]} skills 已同步 (${sillyspecSkills.length} 个)`))
       }
-      console.log(chalk.green('    ✓ Claude Code skills 已同步 (' + sillyspecSkills.length + ' 个)'));
     }
   } else {
     console.log(chalk.yellow('    ⚠ 未找到 skills 目录（npm 包内无 .claude/skills/），跳过同步'));
