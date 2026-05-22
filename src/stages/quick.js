@@ -17,8 +17,21 @@ export const definition = {
 6. 如有 \`--change\`，加载设计文档：\`cat .sillyspec/changes/<变更名>/design.md 2>/dev/null\`（理解设计意图）
 7. 如有需要，查询知识库：\`cat .sillyspec/knowledge/INDEX.md 2>/dev/null\`
 
+### 创建任务记录（必须执行）
+理解完任务后，立即创建记录文件：
+1. \`git config user.name\` 获取用户名
+2. 无 \`--change\`：创建 \.sillyspec/quicklog/QUICKLOG-<git用户名>.md\`（已存在则追加），写入：
+   \`\`\`
+   ## YYYY-MM-DD HH:mm:ss — <一句话任务描述>
+   状态：进行中
+   文件：<预估要改的文件>
+   \`\`\`
+3. 有 \`--change\`：在 \`.sillyspec/changes/<变更名>/tasks.md\` 追加未勾选的 task
+
+这样 Gate 检测到 \.sillyspec/\` 下有变更，就不会拦截后续的代码修改。
+
 ### 输出
-任务理解 + 上下文摘要`,
+任务理解 + 上下文摘要 + quicklog 已创建`,
       outputHint: '任务理解',
       optional: false
     },
@@ -43,14 +56,14 @@ export const definition = {
       optional: false
     },
     {
-      name: '暂存和记录',
-      prompt: `Git 暂存并记录任务。
+      name: '暂存和更新记录',
+      prompt: `Git 暂存并更新任务记录。
 
 ### 操作
 1. \`git add -A\` — 暂存改动文件（不要 commit，由用户通过统一提交工具处理）
-2. 记录：
-   - 有 \`--change\`：在 \`.sillyspec/changes/<变更名>/tasks.md\` 追加 task 并勾选，记录精确到秒的时间戳
-   - 无 \`--change\`：记录到 \`.sillyspec/quicklog/QUICKLOG-<git用户名>.md\`（按 git 用户名隔离）
+2. 更新 Step 1 创建的记录：
+   - 无 \`--change\`：更新 QUICKLOG 条目，将「状态：进行中」改为「状态：已完成」，补充实际改动文件和结果摘要
+   - 有 \`--change\`：勾选 tasks.md 中对应的 task checkbox
 3. QUICKLOG 轮转：超过 500 行则重命名为 \`QUICKLOG-<USER>-YYYY-MM-DD.md\`
 4. 如果发现项目特有的坑，追加到 \`.sillyspec/knowledge/uncategorized.md\`
 5. 任务比预期复杂 → 建议用完整流程
