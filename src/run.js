@@ -280,10 +280,20 @@ async function runStage(pm, progress, stageName, cwd) {
   let currentIdx = steps.findIndex(s => s.status !== 'completed' && s.status !== 'skipped')
 
   if (currentIdx === -1) {
-    console.log(`✅ ${stageName} 阶段已完成。`)
-    console.log(`  如需重新开始，请显式执行 --reset。\n`)
-    return
-  } else if (currentIdx > 0) {
+    // 已完成 → 自动重置，重新开始
+    const freshSteps = await getStageSteps(stageName, cwd, progress)
+    stageData.steps = freshSteps
+      ? freshSteps.map(s => ({ name: s.name, status: 'pending' }))
+      : []
+    stageData.status = 'in-progress'
+    stageData.startedAt = new Date().toLocaleString('zh-CN', { hour12: false })
+    stageData.completedAt = null
+    pm._write(cwd, progress)
+    currentIdx = 0
+    console.log(`🔄 ${stageName} 阶段已自动重置，重新开始。\n`)
+  }
+
+  if (currentIdx > 0) {
     // 有进行中的步骤，提示用户
     const completed = currentIdx
     const total = steps.length
