@@ -145,18 +145,48 @@ grep -rl "<关键词>" <源码目录>/ --include="*.java" --include="*.js" --inc
     },
     {
       name: '输出验证报告',
-      prompt: `生成完整验证报告。
+      prompt: `生成完整验证报告，并写入 verification.md。
 
 ### 操作
 1. 汇总以上所有检查结果
-2. 给出结论：PASS / PASS WITH NOTES / FAIL
+2. 生成 verification.md 文件，保存到 \`.sillyspec/changes/<变更名>/verification.md\`
+3. 给出结论：PASS / PASS WITH NOTES / FAIL
+
+### verification.md 格式
+\`\`\`markdown
+# 验证报告
+
+## 结论
+PASS / PASS WITH NOTES / FAIL
+
+## 任务完成度
+（逐项检查任务的结果）
+
+## 设计一致性
+（对照 design.md 的检查结果）
+
+## 探针结果
+- 未实现标记扫描：...
+- 关键词覆盖：...
+- 测试覆盖：...
+
+## 测试结果
+（测试套件执行结果）
+
+## 技术债务
+（TODO/FIXME/HACK 统计）
+
+## 代码审查
+（问题列表 + 总体评价）
+\`\`\`
 
 ### 输出
-验证报告 markdown + 下一步命令
+verification.md 路径 + 验证报告摘要 + 下一步命令
 
 ### 注意
 - PASS → 运行 \`sillyspec run archive\` 归档
-- FAIL → 修复后运行 \`sillyspec run verify\` 重新验证`,
+- FAIL → 修复后运行 \`sillyspec run verify\` 重新验证
+- verification.md 是变更包的正式验收记录，归档后保留`,
       outputHint: '验证报告',
       optional: false
     }

@@ -65,39 +65,61 @@ export const definition = {
       name: '生成规范文件',
       prompt: `在 \`.sillyspec/changes/<变更名>/\` 下生成四个文件。
 
+### proposal.md 格式要求
+- **动机**：为什么做、解决什么核心问题
+- **关键问题**：为什么现有方案不够（展开 2-3 个具体痛点）
+- **变更范围**：本次做什么
+- **不在范围内**（显式清单）：不做 X、不做 Y
+- **成功标准**（可验证条件）：旧配置默认行为不变、新功能配置后可用
+
+### requirements.md 格式要求
+- **角色表**：涉及的角色和说明
+- **FR 编号需求**：FR-01、FR-02 ... 每条需求用 Given/When/Then 格式
+- **每个边界条件**独立 GWT 块
+- **非功能需求**：兼容性、可回退、可测试、可扩展
+
+### design.md 格式要求
+- **架构决策** + **文件变更清单表格** + **接口定义**
+- **兼容策略**（brownfield 必填）：未配置新功能时行为不变、回退路径
+- **风险登记**表格：编号/风险/等级/应对策略
+- **自审**：需求覆盖、真实性、YAGNI、非目标
+
+### tasks.md 格式要求
+- 任务列表（只列名称，不展开步骤）
+- 每个 task 附文件路径
+
 ### 操作
-1. 生成 proposal.md：动机、变更范围、不在范围内、成功标准
-2. 生成 requirements.md：功能需求、用户场景（Given/When/Then）、非功能需求
-3. 生成 design.md：架构决策、文件变更清单、数据模型、API 设计、代码风格参照
-4. 生成 tasks.md：任务列表（只列名称，不展开步骤）
+1. 生成 proposal.md
+2. 生成 requirements.md
+3. 生成 design.md
+4. 生成 tasks.md
 
 ### 输出
 四个文件路径
 
 ### 注意
-- 表名/字段名必须来自真实 schema 或标注"新增"
+- 表名/字段名/类名必须来自真实代码或标注"新增"
 - 用户场景必须用 Given/When/Then 格式
 - tasks.md 只列任务名，细节在 plan 阶段展开`,
-      outputHint: '四个文件路径',
-      optional: false
-    },
-    {
+
       name: '自检门控',
       prompt: `自检生成的规范文件。
 
 ### 操作
 检查以下各项：
-- [ ] proposal.md 有动机、变更范围、不在范围内、成功标准
+- [ ] proposal.md 有动机、关键问题、变更范围、不在范围内、成功标准
 - [ ] design.md 有文件变更清单表格
-- [ ] requirements.md 有 Given/When/Then 用户场景
+- [ ] design.md 有兼容策略（brownfield 时）
+- [ ] design.md 有风险登记表格
+- [ ] requirements.md 有角色表
+- [ ] requirements.md 有 FR 编号和 Given/When/Then 用户场景
 - [ ] tasks.md 每个 task 有文件路径
 
 任何不通过 → 修正后重新检查。
 
 ### 输出
 自检通过/不通过`,
-      outputHint: '自检结果',
-      optional: false
+
     },
     {
       name: '展示并更新进度',

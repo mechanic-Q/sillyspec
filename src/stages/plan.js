@@ -54,9 +54,16 @@ export const fixedPrefix = [
     name: '展开任务并分组',
     prompt: `把 tasks.md 每个 checkbox 展开为任务描述，按 Wave 分组，产出 plan.md 总览。
 
-### plan.md 格式（轻量总览，PM 视角）
+### plan.md 格式（PM 视角 + 机器可解析）
 \`\`\`markdown
 # 实现计划
+
+## Spike 前置验证（如需要）
+| Spike | 验证内容 | 不通过后果 |
+|---|---|---|
+| spike-01 | ... | task-XX 推翻重设计 |
+
+> 技术不确定性高时才需要 Spike。无不确定性则跳过此节。
 
 ## Wave 1（并行，无依赖）
 - [ ] task-01: 添加用户创建接口
@@ -65,14 +72,42 @@ export const fixedPrefix = [
 ## Wave 2（依赖 Wave 1）
 - [ ] task-03: 用户创建接口联调
 
+## 任务总表
+| 编号 | 任务 | Wave | 优先级 | 估时 | 依赖 | 说明 |
+|---|---|---|---|---|---|---|
+| task-01 | 添加用户创建接口 | W1 | P0 | 4h | — | ... |
+| task-02 | 添加角色创建接口 | W1 | P0 | 3h | — | ... |
+| task-03 | 用户创建接口联调 | W2 | P0 | 4h | task-01,02 | ... |
+
+## 依赖关系图
+\`\`\`mermaid
+graph LR
+  task-01 --> task-03
+  task-02 --> task-03
+\`\`\`
+
+## 关键路径
+task-01 → task-03（最长路径，决定最短交付周期）
+
 ## 全局验收标准
 - [ ] 所有单元测试通过
+- [ ] （brownfield）未配置新功能时行为不变
 \`\`\`
 
 ### 关键规则
-- plan.md 只放任务列表 + Wave 划分 + 全局验收标准，**不放实现细节**
+- plan.md 包含：Wave 分组 + 任务总表 + 依赖图 + 关键路径 + 全局验收标准，**不放实现细节**
 - 实现细节写到后续的 tasks/task-NN.md 中
 - 每个任务编号格式：task-01、task-02 ...
+- **Wave 下的 checkbox 行必须保留**（execute 阶段解析依赖 \`- [ ] task-XX:\` 格式）
+- 任务总表的优先级：P0（必须）/ P1（重要）/ P2（可选）
+- 估时参考：单个 task ≤ 8h，超过则拆分
+
+### Spike 前置验证
+当存在技术不确定性时，在 Wave 之前设计 Spike：
+- 涉及新技术栈/未经验证的集成 → 需要 Spike
+- 涉及安全隔离/性能瓶颈 → 需要 Spike
+- 纯业务逻辑/确定的技术方案 → 不需要 Spike
+- 每个 Spike 定义：验证内容 + 通过标准 + 不通过后果
 
 ### 批量模式指引
 如果 design.md 或需求中包含批量特征（关键词：批量/模板/引擎/N个相似），按以下原则规划：
@@ -87,7 +122,11 @@ export const fixedPrefix = [
 2. 读取 design.md 获取文件变更清单
 3. 逐个展开为任务描述
 4. 分析依赖关系，按 Wave 分组
-5. 保存到 \`.sillyspec/changes/<变更名>/plan.md\`
+5. 生成任务总表（含优先级、估时、依赖）
+6. 生成 Mermaid 依赖关系图
+7. 标注关键路径
+8. 评估是否需要 Spike 前置验证
+9. 保存到 \`.sillyspec/changes/<变更名>/plan.md\`
 
 ### 输出
 plan.md 总览内容`,
@@ -101,9 +140,13 @@ plan.md 总览内容`,
 ### 操作
 检查以下各项：
 - [ ] 每个 task 有编号（task-01、task-02 ...）
-- [ ] 每个 task 有 checkbox
+- [ ] 每个 task 在 Wave 下有 checkbox（\`- [ ] task-XX:\` 格式，execute 解析依赖此格式）
 - [ ] 已标注 Wave 分组和依赖关系
+- [ ] 有任务总表（含优先级、估时、依赖列）
+- [ ] 有 Mermaid 依赖关系图
+- [ ] 有关键路径标注
 - [ ] 有全局验收标准
+- [ ] （brownfield）全局验收包含兼容性条款
 - [ ] 没有实现细节（接口定义、代码示例等不应该在 plan.md 里）
 - [ ] plan.md 与 design.md 的文件变更清单一致
 
@@ -161,57 +204,89 @@ function parseTaskCount(planContent) {
  * 生成单个任务的蓝图写作 prompt
  */
 function buildTaskPrompt(taskNum, taskName, changeDir) {
-  return `编写任务蓝图 tasks/task-${String(taskNum).padStart(2, '0')}.md
+  const num = String(taskNum).padStart(2, '0')
+  return `编写任务蓝图 tasks/task-${num}.md
 
 ### 任务
 ${taskName}
 
 ### 文件路径
-\`.sillyspec/changes/<变更名>/tasks/task-${String(taskNum).padStart(2, '0')}.md\`
+\`.sillyspec/changes/<变更名>/tasks/task-${num}.md\`
 
 ### 格式要求（必须严格遵守）
 \`\`\`markdown
-# task-${String(taskNum).padStart(2, '0')}: ${taskName}
+---
+id: task-${num}
+title: ${taskName}
+priority: P0
+estimated_hours: N
+depends_on: []
+blocks: []
+allowed_paths:
+  - 允许修改的路径范围
+---
 
-## 修改文件
-- 具体文件路径列表
+# task-${num}: ${taskName}
+
+## 修改文件（必填）
+- 精确到文件路径，列出所有需要新增或修改的文件
 
 ## 实现要求
 1. 具体做什么，写清楚
 2. ...
 
-## 接口定义
-（代码类任务必填，写方法签名、数据结构）
+## 接口定义（代码类任务必填）
+写方法签名、数据结构、控制流伪代码。AI executor 应能照着直接编码。
 
-## 边界处理
-- 异常场景列表
+## 边界处理（必填）
+- null/空值行为
+- 兼容旧行为（brownfield：未配置新功能时行为不变）
+- 异常不静默吞掉（明确返回值或抛出）
+- 不修改传入参数
+- 歧义/冲突场景的处理策略
+
+## 非目标（本任务不做的事）
+- 明确列出边界，防止 scope creep
 
 ## 参考
 - 已有代码可参考的模式
 - 相关的 CONVENTIONS.md 条目
 
 ## TDD 步骤
-1. 写测试 ...
-2. 运行 <test-cmd> 确认失败
-3. 写代码 ...
-4. 运行 <test-cmd> 确认通过
+1. 写 XxxTest，覆盖场景 A/B/C
+2. 运行 <test-cmd> 确认测试失败
+3. 实现 Xxx
+4. 运行 <test-cmd> 确认测试通过
+5. 运行全量测试确认无回退
 （纯配置/文档类任务简化为：1. 实现 2. 验证）
 
 ## 验收标准
-- [ ] 具体可测试的验收条件
+| # | 验证步骤 | 通过标准 |
+|---|---|---|
+| AC-01 | 具体操作 | 期望结果 |
+| AC-02 | ... | ... |
 \`\`\`
+
+### frontmatter 元数据说明
+- \`priority\`: P0（必须）/ P1（重要）/ P2（可选）
+- \`estimated_hours\`: 预估工时，单个 task ≤ 8h
+- \`depends_on\`: 依赖的前序 task 编号列表
+- \`blocks\`: 被本 task 阻塞的后续 task 编号列表
+- \`allowed_paths\`: AI executor 可以修改的文件路径范围（安全边界）
 
 ### 关键规则
 - task-N.md 必须独立完整，execute 子代理只读这一个文件就能干活
 - 不要依赖其他 task-N.md 的内容
 - 接口定义写到"搬砖工照着做"的程度
+- 边界处理至少覆盖 5 条规则
+- 验收标准用表格格式，每条可点击验证，禁止"功能可演示"类笼统表述
 - 写完后保存到文件
 
 ### 操作
 1. 读取 design.md 和 plan.md 了解上下文
 2. 读取相关源文件了解现有代码
 3. 编写任务蓝图
-4. 保存到 tasks/task-${String(taskNum).padStart(2, '0')}.md
+4. 保存到 tasks/task-${num}.md
 
 ### 输出
 任务蓝图内容摘要`
@@ -238,36 +313,59 @@ export function buildCoordinatorStep(changeDir, taskNames) {
 2. 读取相关源文件了解现有代码
 3. 按以下格式编写任务蓝图并保存到 ${changeDir}/tasks/task-${num}.md：
 
+---
+id: task-${num}
+title: ${name}
+priority: P0/P1/P2
+estimated_hours: N
+depends_on: [task-XX]
+blocks: [task-XX]
+allowed_paths:
+  - ...
+---
+
 # task-${num}: ${name}
 
-## 修改文件
-- 文件路径列表
+## 修改文件（必填）
+- 精确到文件路径
 
 ## 实现要求
 1. 具体做什么
 
-## 接口定义
-（代码类任务必填）
+## 接口定义（代码类任务必填）
+方法签名、数据结构、控制流伪代码
 
-## 边界处理
-- 异常场景
+## 边界处理（必填）
+- null/空值行为
+- 兼容旧行为（brownfield：未配置新功能时行为不变）
+- 异常不静默吞掉（明确返回值或抛出）
+- 不修改传入参数
+- 歧义/冲突场景的处理策略
+
+## 非目标（本任务不做的事）
+- 明确边界，防止 scope creep
 
 ## 参考
 - 可参考的模式
 
 ## TDD 步骤
-1. 写测试 → 2. 确认失败 → 3. 写代码 → 4. 确认通过
+1. 写测试 → 2. 确认失败 → 3. 写代码 → 4. 确认通过 → 5. 回归
 
 ## 验收标准
-- [ ] 具体可测试的条件
+| # | 验证步骤 | 通过标准 |
+|---|---|---|
+| AC-01 | ... | ... |
 
 关键规则：
 - 必须独立完整，execute 子代理只读这一个文件就能干活
 - 不要依赖其他 task-N.md 的内容
 - 接口定义写到"搬砖工照着做"的程度
+- 边界处理至少 5 条
+- 验收标准用表格，禁止笼统表述
 - 写完后用 Write tool 保存到文件
 \`\`\``
   }).join('\n\n')
+
 
   return {
     name: '生成任务蓝图（子代理并行）',
@@ -293,7 +391,9 @@ ${subagentPrompts}
 
 ## 验收
 - 每个 task-N.md 文件存在且非空
-- 包含所有必要章节：修改文件、实现要求、接口定义、边界处理、TDD 步骤、验收标准`,
+- 包含 YAML frontmatter（id、title、priority、depends_on、blocks、allowed_paths）
+- 包含所有必要章节：修改文件、实现要求、接口定义、边界处理（≥5条）、非目标、TDD 步骤、验收标准（表格格式）
+- 边界处理覆盖：null/空值、兼容性、异常处理、参数不可变、歧义场景`,
     outputHint: '蓝图生成结果',
     optional: false
   }
