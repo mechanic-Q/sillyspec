@@ -18,9 +18,15 @@ export const definition = {
 for d in .sillyspec .sillyspec/projects .sillyspec/docs .sillyspec/changes .sillyspec/.runtime; do
   [ -d "$d" ] && echo "✅ $d" || echo "❌ $d"
 done
-# 检查 progress.json
-[ -f .sillyspec/.runtime/progress.json ] && echo "✅ progress.json 存在" || echo "❌ progress.json 不存在"
-node -e "JSON.parse(require('fs').readFileSync('.sillyspec/.runtime/progress.json','utf8')); console.log('✅ progress.json 可解析')" 2>/dev/null || echo "⚠️ progress.json 不可解析"
+# 检查 progress.json（支持新版按变更隔离和旧版全局）
+if [ -d .sillyspec/changes ]; then
+  PROGRESS_FILE=$(find .sillyspec/changes -maxdepth 2 -name progress.json | head -1)
+fi
+if [ -z "$PROGRESS_FILE" ]; then
+  PROGRESS_FILE='.sillyspec/.runtime/progress.json'
+fi
+[ -f "$PROGRESS_FILE" ] && echo "✅ progress.json 存在 ($PROGRESS_FILE)" || echo "❌ progress.json 不存在"
+node -e "JSON.parse(require('fs').readFileSync('$PROGRESS_FILE','utf8')); console.log('✅ progress.json 可解析')" 2>/dev/null || echo "⚠️ progress.json 不可解析"
 \`\`\`
 
 ### 2. 项目配置检查
@@ -42,7 +48,7 @@ done
 \`\`\`bash
 # 读取 currentChange 并检查目录存在性
 node -e "
-const p = JSON.parse(require('fs').readFileSync('.sillyspec/.runtime/progress.json','utf8'));
+const p = JSON.parse(require('fs').readFileSync(process.env.PROGRESS_FILE || '.sillyspec/.runtime/progress.json','utf8'));
 const cc = p.currentChange;
 if (!cc) { console.log('ℹ️ 无当前变更'); process.exit(0); }
 const dir = '.sillyspec/changes/' + cc;
@@ -68,7 +74,7 @@ if (!fs.existsSync(dir)) { console.log('ℹ️ changes/ 目录不存在'); proce
 const subs = fs.readdirSync(dir).filter(f => fs.statSync(dir+'/'+f).isDirectory());
 if (subs.length === 0) { console.log('ℹ️ 无变更目录'); process.exit(0); }
 let progress;
-try { progress = JSON.parse(fs.readFileSync('.sillyspec/.runtime/progress.json','utf8')); } catch { console.log('⚠️ 无法读取 progress.json'); subs.forEach(s => console.log('❓ ' + s)); process.exit(0); }
+try { progress = JSON.parse(fs.readFileSync(process.env.PROGRESS_FILE || '.sillyspec/.runtime/progress.json','utf8')); } catch { console.log('⚠️ 无法读取 progress.json'); subs.forEach(s => console.log('❓ ' + s)); process.exit(0); }
 const known = new Set();
 if (progress.currentChange) known.add(progress.currentChange);
 for (const sd of Object.values(progress.stages || {})) {
@@ -121,7 +127,7 @@ done
 # 确定项目路径（使用 progress.json 中的项目或当前目录）
 PROJECT_DIR=$(node -e "
 const fs=require('fs');
-try{const p=JSON.parse(fs.readFileSync('.sillyspec/.runtime/progress.json','utf8'));if(p.project){console.log(p.project);process.exit(0)}}catch{}
+try{const fs=require('fs'),path=require('path');const changesDir='.sillyspec/changes';let pp=null;if(fs.existsSync(changesDir)){const entries=fs.readdirSync(changesDir,{withFileTypes:true}).filter(e=>e.isDirectory()&&e.name!=='archive');if(entries.length===1)pp=path.join(changesDir,entries[0].name,'progress.json');}if(!pp)pp='.sillyspec/.runtime/progress.json';const p=JSON.parse(fs.readFileSync(pp,'utf8'));if(p.project){console.log(p.project);process.exit(0)}}catch{}
 const files=fs.readdirSync('.sillyspec/projects').filter(f=>f.endsWith('.yaml'));
 if(files.length>0){const c=fs.readFileSync('.sillyspec/projects/'+files[0],'utf8');const m=c.match(/^path:\\s*(.+)/m);console.log(m?m[1].trim():'.')}else console.log('.')
 " 2>/dev/null)

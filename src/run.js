@@ -2,6 +2,7 @@
  * sillyspec run 命令实现
  *
  * CLI 成为流程引擎，AI 变成步骤执行器。
+ * 支持多变更并行：每个变更独立 progress.json。
  */
 import { basename, join } from 'path'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, statSync } from 'fs'
@@ -11,7 +12,7 @@ import { buildExecuteSteps } from './stages/execute.js'
 import { buildPlanSteps } from './stages/plan.js'
 
 /**
- * 统一查找变更目录
+ * 统一查找变更目录（与 progress.js 的变更检测逻辑一致）
  */
 function resolveChangeDir(cwd, progress) {
   const changesDir = join(cwd, '.sillyspec', 'changes')
@@ -49,6 +50,19 @@ function autoDetectChange(progress, cwd) {
 }
 
 /**
+ * 从 progress 或变更目录推导变更名
+ */
+function resolveChangeName(cwd, progress) {
+  if (progress.currentChange) return progress.currentChange
+  const changesDir = join(cwd, '.sillyspec', 'changes')
+  if (!existsSync(changesDir)) return null
+  const entries = readdirSync(changesDir, { withFileTypes: true })
+    .filter(e => e.isDirectory() && e.name !== 'archive')
+  if (entries.length === 1) return entries[0].name
+  return null
+}
+
+/**
  * 获取阶段的步骤定义（execute 需要动态构建）
  */
 async function getStageSteps(stageName, cwd, progress) {
@@ -70,7 +84,7 @@ async function getStageSteps(stageName, cwd, progress) {
 }
 
 /**
- * 确保阶段的 steps 已初始化到 progress.json
+ * 确保阶段的 steps 已初始化到 progress
  */
 async function ensureStageSteps(progress, stageName, cwd) {
   if (!progress.stages) progress.stages = {}
@@ -90,7 +104,6 @@ async function ensureStageSteps(progress, stageName, cwd) {
 
   // 检查步骤数量是否匹配（execute 动态步骤可能变化）
   if (progress.stages[stageName].steps.length !== steps.length) {
-    // 保留已完成的状态，重新构建步骤列表
     const oldSteps = progress.stages[stageName].steps
     progress.stages[stageName].steps = steps.map(s => {
       const old = oldSteps.find(step => step.name === s.name)
@@ -106,7 +119,7 @@ async function ensureStageSteps(progress, stageName, cwd) {
 /**
  * 输出当前步骤的 prompt
  */
-function outputStep(stageName, stepIndex, steps, cwd) {
+function outputStep(stageName, stepIndex, steps, cwd, changeName) {
   const step = steps[stepIndex]
   const total = steps.length
   const projectName = basename(cwd)
@@ -131,6 +144,7 @@ function outputStep(stageName, stepIndex, steps, cwd) {
   console.log(`step: ${stepIndex + 1}/${total}`)
   console.log(`stepName: ${step.name}`)
   console.log(`project: ${projectName}`)
+  if (changeName) console.log(`change: ${changeName}`)
   console.log(`---\n`)
   if (personas[stageName]) {
     console.log(personas[stageName])
@@ -146,8 +160,9 @@ function outputStep(stageName, stepIndex, steps, cwd) {
   console.log('- 完成后立即执行 --done 命令，不得跳过')
   console.log('- 文档类型文件（.md/.yaml/.json 等）头部必须包含 author（git 用户名）和 created_at（精确到秒）')
   console.log('- 执行构建/测试前必须先读 local.yaml，优先使用其中配置的命令、路径和环境变量；未配置时才使用默认值')
+  const changeFlag = changeName ? ` --change ${changeName}` : ''
   console.log(`\n### 完成后执行`)
-  console.log(`sillyspec run ${stageName} --done --input "用户原始需求/反馈" --output "你的摘要"`)
+  console.log(`sillyspec run ${stageName} --done${changeFlag} --input "用户原始需求/反馈" --output "你的摘要"`)
 }
 
 /**
@@ -200,41 +215,45 @@ export async function runCommand(args, cwd) {
   const isAuxiliary = auxiliaryStages.includes(stageName)
 
   const pm = new ProgressManager()
-  let progress = pm.read(cwd)
+  pm._migrateIfNeeded(cwd)
+  let progress = pm.read(cwd, changeName)
 
   if (!progress) {
-    // 辅助命令可以在没有 progress.json 时工作（比如 scan）
-    if (!isAuxiliary) {
+    // 如果指定了变更名或有变更目录，自动初始化变更的 progress
+    const autoChange = changeName || resolveChangeNameAuto(cwd)
+    if (autoChange) {
+      progress = pm.initChange(cwd, autoChange)
+    } else if (!isAuxiliary) {
       console.error('❌ 未找到 progress.json，请先运行 sillyspec init')
+      console.error('  提示：使用 --change <name> 指定变更名')
       process.exit(1)
     }
-    progress = pm.init(cwd)
   }
+
+  // 确保 progress 有 currentChange
+  const effectiveChange = changeName || progress.currentChange || resolveChangeName(cwd, progress)
 
   // -- auto 模式：自动推进所有流程阶段
   if (stageName === 'auto') {
-    return await runAutoMode(pm, progress, cwd, flags)
+    return await runAutoMode(pm, progress, cwd, flags, effectiveChange)
   }
 
-  // --change 设置当前变更名
-  if (changeName) {
-    progress.currentChange = changeName
-    progress.lastActive = new Date().toLocaleString('zh-CN', { hour12: false })
-    pm._write(cwd, progress)
-    console.log(`✅ 当前变更设置为：${changeName}`)
-    return
+  // --change 只作为变更名标识，不再拦截流程
+  // 注册变更到全局活跃列表（如果尚未注册）
+  if (effectiveChange) {
+    pm.registerChange(cwd, effectiveChange)
   }
 
   // --reset
   if (isReset) {
-    return await resetStage(pm, progress, stageName, cwd)
+    return await resetStage(pm, progress, stageName, cwd, effectiveChange)
   }
 
   // 确保步骤已初始化
   const changed = await ensureStageSteps(progress, stageName, cwd)
   if (changed) {
-    pm._write(cwd, progress)
-    progress = pm.read(cwd)
+    pm._write(cwd, progress, effectiveChange)
+    progress = pm.read(cwd, effectiveChange)
   }
 
   // --status
@@ -244,23 +263,35 @@ export async function runCommand(args, cwd) {
 
   // --skip
   if (isSkip) {
-    return await skipStep(pm, progress, stageName, cwd)
+    return await skipStep(pm, progress, stageName, cwd, effectiveChange)
   }
 
   // --done
   if (isDone) {
-    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm })
+    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange })
   }
 
   // 默认：输出当前步骤
-  return await runStage(pm, progress, stageName, cwd)
+  return await runStage(pm, progress, stageName, cwd, effectiveChange)
 }
 
-async function runStage(pm, progress, stageName, cwd) {
+/**
+ * 自动推导变更名（不依赖 progress）
+ */
+function resolveChangeNameAuto(cwd) {
+  const changesDir = join(cwd, '.sillyspec', 'changes')
+  if (!existsSync(changesDir)) return null
+  const entries = readdirSync(changesDir, { withFileTypes: true })
+    .filter(e => e.isDirectory() && e.name !== 'archive')
+  if (entries.length === 1) return entries[0].name
+  return null
+}
+
+async function runStage(pm, progress, stageName, cwd, changeName) {
   // 自动探测 currentChange
   if (autoDetectChange(progress, cwd)) {
     progress.lastActive = new Date().toLocaleString('zh-CN', { hour12: false })
-    pm._write(cwd, progress)
+    pm._write(cwd, progress, changeName)
   }
 
   const stageData = progress.stages[stageName]
@@ -273,7 +304,7 @@ async function runStage(pm, progress, stageName, cwd) {
   if (progress.currentStage !== stageName) {
     progress.currentStage = stageName
     progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-    pm._write(cwd, progress)
+    pm._write(cwd, progress, changeName)
   }
 
   const steps = stageData.steps
@@ -288,13 +319,12 @@ async function runStage(pm, progress, stageName, cwd) {
     stageData.status = 'in-progress'
     stageData.startedAt = new Date().toLocaleString('zh-CN', { hour12: false })
     stageData.completedAt = null
-    pm._write(cwd, progress)
+    pm._write(cwd, progress, changeName)
     currentIdx = 0
     console.log(`🔄 ${stageName} 阶段已自动重置，重新开始。\n`)
   }
 
   if (currentIdx > 0) {
-    // 有进行中的步骤，提示用户
     const completed = currentIdx
     const total = steps.length
     console.log(`⚠️  ${stageName} 已进行到第 ${currentIdx + 1}/${total} 步（前 ${completed} 步已完成）。`)
@@ -303,7 +333,7 @@ async function runStage(pm, progress, stageName, cwd) {
 
   const defSteps = await getStageSteps(stageName, cwd, progress)
   if (defSteps && defSteps[currentIdx]) {
-    outputStep(stageName, currentIdx, defSteps, cwd)
+    outputStep(stageName, currentIdx, defSteps, cwd, changeName)
   }
 }
 
@@ -311,7 +341,6 @@ function validateMetadata(cwd, stageName) {
   const changesDir = join(cwd, '.sillyspec', 'changes')
   if (!existsSync(changesDir)) return
 
-  // 找最近 10 分钟内修改的 md/yaml 文件
   const cutoff = Date.now() - 10 * 60 * 1000
   const missing = []
 
@@ -340,7 +369,7 @@ function validateMetadata(cwd, stageName) {
 }
 
 async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
-  const { printNext = true, confirm = false } = options
+  const { printNext = true, confirm = false, changeName } = options
   const stageData = progress.stages[stageName]
   if (!stageData || !stageData.steps) {
     console.error(`❌ 阶段 ${stageName} 未初始化`)
@@ -355,19 +384,16 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     process.exit(1)
   }
 
-  // 标记完成（先标记，再处理动态步骤插入）
-
   steps[currentIdx].status = 'completed'
   steps[currentIdx].completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
   if (outputText) {
     const MAX_OUTPUT = 200
     if (outputText.length > MAX_OUTPUT) {
       steps[currentIdx].output = outputText.slice(0, MAX_OUTPUT) + '…'
-      // Save full output to artifacts/
       const artifactsDir = join(cwd, '.sillyspec', '.runtime', 'artifacts')
       mkdirSync(artifactsDir, { recursive: true })
       const ts = new Date().toISOString().slice(0,19).replace(/[-T:]/g, '')
-      writeFileSync(join(artifactsDir, `${stageName}-step${currentIdx + 1}-${ts}.txt`), outputText)
+      writeFileSync(join(artifactsDir, `${changeName || 'unknown'}-${stageName}-step${currentIdx + 1}-${ts}.txt`), outputText)
     } else {
       steps[currentIdx].output = outputText
     }
@@ -384,10 +410,8 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         const fullSteps = buildPlanSteps(changeDir, planContent)
         const prefixLen = fixedPrefix.length
         const suffixLen = fixedSuffix.length
-        // 提取协调器步骤（prefix 和 suffix 之间）
         const coordinatorSteps = fullSteps.slice(prefixLen, suffixLen > 0 ? -suffixLen : undefined)
         if (coordinatorSteps.length > 0) {
-          // 在当前步骤之后插入协调器步骤（含 prompt，否则 outputStep 无法打印）
           for (let i = 0; i < coordinatorSteps.length; i++) {
             steps.splice(currentIdx + 1 + i, 0, {
               name: coordinatorSteps[i].name,
@@ -406,36 +430,34 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
   const nextPendingIdx = steps.findIndex(s => s.status === 'pending')
 
   if (nextPendingIdx === -1) {
-    // 全部完成 — 仅标记当前阶段，不自动推进 currentStage
     stageData.status = 'completed'
     stageData.completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
     progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-    pm._write(cwd, progress)
+    pm._write(cwd, progress, changeName)
 
     // Append to user-inputs.md
     if (outputText) {
       const inputsPath = join(cwd, '.sillyspec', '.runtime', 'user-inputs.md')
-      const entry = `\n## ${new Date().toLocaleString('zh-CN',{hour12:false})} | ${stageName}: ${steps[currentIdx].name}\n${inputText ? "- 输入：" + inputText + "\n" : ""}- 输出：${outputText}\n`
+      const entry = `\n## ${new Date().toLocaleString('zh-CN',{hour12:false})} | ${changeName || '?'} | ${stageName}: ${steps[currentIdx].name}\n${inputText ? "- 输入：" + inputText + "\n" : ""}- 输出：${outputText}\n`
       appendFileSync(inputsPath, entry)
     }
 
-    // 验证：检查生成的文件是否包含 author 和 created_at
     validateMetadata(cwd, stageName)
 
-    // archive 阶段 Step 2（确认归档）完成时自动执行归档移动
+    // archive 阶段确认归档
     if (stageName === 'archive' && steps[currentIdx]?.name === '确认归档') {
       if (confirm) {
         const { renameSync } = await import('fs')
-        const changeName = progress.currentChange
-        if (!changeName) {
+        const archiveChangeName = progress.currentChange
+        if (!archiveChangeName) {
           console.error('❌ 归档失败：未找到当前变更名（currentChange）')
           process.exit(1)
         }
         const changesDir = join(cwd, '.sillyspec', 'changes')
         const archiveDir = join(changesDir, 'archive')
-        const srcDir = join(changesDir, changeName)
+        const srcDir = join(changesDir, archiveChangeName)
         const date = new Date().toISOString().slice(0, 10)
-        const destDir = join(archiveDir, `${date}-${changeName}`)
+        const destDir = join(archiveDir, `${date}-${archiveChangeName}`)
 
         if (!existsSync(srcDir)) {
           console.error(`❌ 归档失败：源目录不存在 ${srcDir}`)
@@ -448,21 +470,20 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         mkdirSync(archiveDir, { recursive: true })
         renameSync(srcDir, destDir)
 
-        // 校验
         if (!existsSync(destDir) || existsSync(srcDir)) {
           console.error('❌ 归档校验失败：移动操作异常')
           process.exit(1)
         }
 
-        // 清除 currentChange
-        progress.currentChange = null
-        console.log(`📦 已归档：${changeName} → archive/${date}-${changeName}/`)
+        // 从全局活跃列表移除
+        pm.unregisterChange(cwd, archiveChangeName)
+        console.log(`📦 已归档：${archiveChangeName} → archive/${date}-${archiveChangeName}/`)
       } else {
         console.log('⚠️  请添加 --confirm 确认归档，例如：sillyspec run archive --done --confirm --output "确认归档"')
       }
     }
 
-    // 辅助阶段（archive/scan/quick 等）完成后重置步骤，允许重复执行
+    // 辅助阶段完成后重置步骤
     const stageDef = stageRegistry[stageName]
     if (stageDef?.auxiliary) {
       const freshSteps = (stageDef.steps || []).map(s => ({
@@ -474,13 +495,12 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       stageData.steps = freshSteps
       stageData.status = 'pending'
       stageData.completedAt = null
-      pm._write(cwd, progress)
+      pm._write(cwd, progress, changeName)
     }
 
     const total = steps.length
     console.log(`✅ ${stageName} 阶段已完成（${total}/${total} 步）`)
 
-    // 阶段完成后提示下一步
     if (stageName === 'execute') {
       console.log('\n👉 下一步：sillyspec run verify（验证通过后才能归档）')
     } else if (stageName === 'verify') {
@@ -494,24 +514,24 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
   }
 
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-  pm._write(cwd, progress)
+  pm._write(cwd, progress, changeName)
 
   // Append to user-inputs.md
   if (outputText) {
     const inputsPath = join(cwd, '.sillyspec', '.runtime', 'user-inputs.md')
-    const entry = `\n## ${new Date().toLocaleString('zh-CN',{hour12:false})} | ${stageName}: ${steps[currentIdx].name}\n${inputText ? "- 输入：" + inputText + "\n" : ""}- 输出：${outputText}\n`
+    const entry = `\n## ${new Date().toLocaleString('zh-CN',{hour12:false})} | ${changeName || '?'} | ${stageName}: ${steps[currentIdx].name}\n${inputText ? "- 输入：" + inputText + "\n" : ""}- 输出：${outputText}\n`
     appendFileSync(inputsPath, entry)
   }
 
   const defSteps = await getStageSteps(stageName, cwd, progress)
   console.log(`✅ Step ${currentIdx + 1}/${steps.length} 完成：${steps[currentIdx].name}\n`)
   if (printNext) {
-    outputStep(stageName, nextPendingIdx, defSteps, cwd)
+    outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName)
   }
   return { stageCompleted: false, currentIdx, nextPendingIdx }
 }
 
-async function skipStep(pm, progress, stageName, cwd) {
+async function skipStep(pm, progress, stageName, cwd, changeName) {
   const stageData = progress.stages[stageName]
   if (!stageData || !stageData.steps) {
     console.error(`❌ 阶段 ${stageName} 未初始化`)
@@ -536,15 +556,14 @@ async function skipStep(pm, progress, stageName, cwd) {
   steps[currentIdx].status = 'skipped'
   steps[currentIdx].skippedAt = new Date().toLocaleString('zh-CN',{hour12:false})
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-  pm._write(cwd, progress)
+  pm._write(cwd, progress, changeName)
 
   console.log(`⏭️ Step ${currentIdx + 1}/${steps.length} 已跳过：${steps[currentIdx].name}`)
 
-  // 输出下一步
   const nextPendingIdx = steps.findIndex(s => s.status === 'pending')
   if (nextPendingIdx !== -1 && defSteps) {
     console.log('')
-    outputStep(stageName, nextPendingIdx, defSteps, cwd)
+    outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName)
   }
 }
 
@@ -567,7 +586,6 @@ function showStatus(progress, stageName) {
 
   const firstPending = steps.findIndex(s => s.status === 'pending')
 
-  // 批量进度
   if (progress.batchProgress) {
     const bp = progress.batchProgress
     const bpTotal = bp.total || 0
@@ -591,7 +609,7 @@ function showStatus(progress, stageName) {
   })
 }
 
-async function resetStage(pm, progress, stageName, cwd) {
+async function resetStage(pm, progress, stageName, cwd, changeName) {
   const defSteps = await getStageSteps(stageName, cwd, progress)
   progress.stages[stageName] = {
     status: 'in-progress',
@@ -600,14 +618,14 @@ async function resetStage(pm, progress, stageName, cwd) {
     steps: defSteps ? defSteps.map(s => ({ name: s.name, status: 'pending' })) : []
   }
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
-  pm._write(cwd, progress)
+  pm._write(cwd, progress, changeName)
   console.log(`🔄 ${stageName} 阶段已重置`)
 }
 
 /**
  * auto 模式：自动推进 brainstorm → plan → execute → verify
  */
-async function runAutoMode(pm, progress, cwd, flags) {
+async function runAutoMode(pm, progress, cwd, flags, changeName) {
   const flowStages = ['brainstorm', 'plan', 'execute', 'verify']
   const isDone = flags.includes('--done')
   const outputIdx = flags.indexOf('--output')
@@ -623,8 +641,8 @@ async function runAutoMode(pm, progress, cwd, flags) {
     const stageChanged = progress.currentStage !== stage
     progress.currentStage = stage
     const changed = await ensureStageSteps(progress, stage, cwd)
-    if (stageChanged || changed) pm._write(cwd, progress)
-    progress = pm.read(cwd)
+    if (stageChanged || changed) pm._write(cwd, progress, changeName)
+    progress = pm.read(cwd, changeName)
     return progress
   }
 
@@ -637,7 +655,6 @@ async function runAutoMode(pm, progress, cwd, flags) {
     return
   }
   if (!flowStages.includes(currentStage)) {
-    // 当前在辅助阶段（scan/quick/archive 等），自动跳到第一个未完成的流程阶段
     const openStage = firstOpenStage()
     if (!openStage) {
       console.log('All auto flow stages are complete.')
@@ -651,6 +668,7 @@ async function runAutoMode(pm, progress, cwd, flags) {
   if (!isDone) {
     console.log('════════════════════════════════════════')
     console.log('  SillySpec Auto Mode')
+    if (changeName) console.log(`  Change: ${changeName}`)
     console.log('════════════════════════════════════════')
     console.log(`  Flow: ${flowStages.join(' -> ')}`)
     console.log(`  Current: ${currentStage}`)
@@ -671,7 +689,7 @@ async function runAutoMode(pm, progress, cwd, flags) {
       else console.log('All auto flow stages are complete.')
       return
     }
-    outputStep(currentStage, pendingIdx, defSteps, cwd)
+    outputStep(currentStage, pendingIdx, defSteps, cwd, changeName)
     return
   }
 
@@ -680,14 +698,14 @@ async function runAutoMode(pm, progress, cwd, flags) {
     process.exit(1)
   }
 
-  const result = await completeStep(pm, progress, currentStage, cwd, outputText, inputText, { printNext: false })
+  const result = await completeStep(pm, progress, currentStage, cwd, outputText, inputText, { printNext: false, changeName })
   if (!result) return
-  progress = pm.read(cwd)
+  progress = pm.read(cwd, changeName)
 
   const nextPendingIdx = progress.stages[currentStage]?.steps?.findIndex(step => step.status === 'pending') ?? -1
   if (nextPendingIdx !== -1) {
     const defSteps = await getStageSteps(currentStage, cwd, progress)
-    outputStep(currentStage, nextPendingIdx, defSteps, cwd)
+    outputStep(currentStage, nextPendingIdx, defSteps, cwd, changeName)
     return
   }
 
@@ -707,11 +725,11 @@ async function runAutoMode(pm, progress, cwd, flags) {
   }
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
   await ensureStageSteps(progress, next, cwd)
-  pm._write(cwd, progress)
-  progress = pm.read(cwd)
+  pm._write(cwd, progress, changeName)
+  progress = pm.read(cwd, changeName)
 
   console.log(`\n${currentStage} complete. Auto advanced to ${next}.`)
   const nextSteps = await getStageSteps(next, cwd, progress)
   const firstPending = progress.stages[next]?.steps?.findIndex(step => step.status === 'pending') ?? -1
-  if (firstPending !== -1) outputStep(next, firstPending, nextSteps, cwd)
+  if (firstPending !== -1) outputStep(next, firstPending, nextSteps, cwd, changeName)
 }

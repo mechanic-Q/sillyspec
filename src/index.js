@@ -136,9 +136,13 @@ async function main() {
       break;
     case 'progress': {
       const pm = new ProgressManager();
+      pm._migrateIfNeeded(dir);
       const subCommand = filteredArgs[1];
       const stageIdx = filteredArgs.indexOf('--stage');
       const stage = stageIdx >= 0 && filteredArgs[stageIdx + 1] ? filteredArgs[stageIdx + 1] : null;
+      // 解析 --change 参数
+      const progChangeIdx = args.indexOf('--change');
+      const progChangeName = progChangeIdx >= 0 && args[progChangeIdx + 1] ? args[progChangeIdx + 1] : null;
 
       switch (subCommand) {
         case 'init':
@@ -146,49 +150,48 @@ async function main() {
           break;
         case 'status':
         case 'show':
-          pm.show(dir);
+          pm.show(dir, progChangeName);
           break;
         case 'validate':
-          await pm.validate(dir);
+          await pm.validate(dir, progChangeName);
           break;
         case 'reset':
-          pm.reset(dir, stage);
+          pm.reset(dir, stage, progChangeName);
           break;
         case 'set-stage': {
           const setStageName = filteredArgs[2];
-          if (!setStageName) { console.log('❌ 用法: sillyspec progress set-stage <stage>'); break; }
-          pm.setStage(dir, setStageName);
+          if (!setStageName) { console.log('❌ 用法: sillyspec progress set-stage <stage> [--change <name>]'); break; }
+          pm.setStage(dir, setStageName, progChangeName);
           break;
         }
         case 'add-step': {
           const addStepStage = filteredArgs[2];
           const addStepName = filteredArgs[3];
-          if (!addStepStage || !addStepName) { console.log('❌ 用法: sillyspec progress add-step <stage> <step-name>'); break; }
-          pm.addStep(dir, addStepStage, addStepName);
+          if (!addStepStage || !addStepName) { console.log('❌ 用法: sillyspec progress add-step <stage> <step-name> [--change <name>]'); break; }
+          pm.addStep(dir, addStepStage, addStepName, progChangeName);
           break;
         }
         case 'update-step': {
           const updStepStage = filteredArgs[2];
           const updStepName = filteredArgs[3];
-          if (!updStepStage || !updStepName) { console.log('❌ 用法: sillyspec progress update-step <stage> <step-name> --status <status> [--output <text>]'); break; }
-          // Parse --status and --output from args
+          if (!updStepStage || !updStepName) { console.log('❌ 用法: sillyspec progress update-step <stage> <step-name> --status <status> [--output <text>] [--change <name>]'); break; }
           let updStatus = null, updOutput = undefined;
           for (let ai = 0; ai < args.length; ai++) {
             if (args[ai] === '--status' && args[ai + 1]) { updStatus = args[ai + 1]; ai++; }
             if (args[ai] === '--output' && args[ai + 1]) { updOutput = args[ai + 1]; ai++; }
           }
-          pm.updateStep(dir, updStepStage, updStepName, { status: updStatus, output: updOutput });
+          pm.updateStep(dir, updStepStage, updStepName, { status: updStatus, output: updOutput }, progChangeName);
           break;
         }
         case 'complete-stage': {
           const compStageName = filteredArgs[2];
           if (!compStageName) { console.log('❌ 用法: sillyspec progress complete-stage <stage>'); break; }
-          pm.completeStage(dir, compStageName);
+          pm.completeStage(dir, compStageName, progChangeName);
           break;
         }
         case 'batch': {
           if (filteredArgs.includes('--status')) {
-            const bp = pm.readBatchProgress(dir);
+            const bp = pm.readBatchProgress(dir, progChangeName);
             if (!bp) { console.log('📭 无批量进度数据'); break; }
             const line = pm._renderBatchProgress(bp);
             console.log(line || '📭 无批量进度数据');
@@ -207,7 +210,7 @@ async function main() {
               console.log('     sillyspec progress batch --status');
               break;
             }
-            pm.updateBatchProgress(dir, batchData);
+            pm.updateBatchProgress(dir, batchData, progChangeName);
             console.log('✅ 批量进度已更新');
           }
           break;

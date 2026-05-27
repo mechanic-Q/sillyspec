@@ -56,7 +56,7 @@ const INJECTION_CONTENT = `## SillySpec — 规范驱动开发
 - 遵循 \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\` 中的代码风格
 
 ### 工作流程
-- 读取 \`.sillyspec/.runtime/progress.json\` 确认当前阶段（使用 \`sillyspec progress show\`）
+- 读取当前变更的 progress.json 确认当前阶段（使用 \`sillyspec progress show\`）
 - 各阶段产出文件位于 \`.sillyspec/changes/<变更名>/\` 下
 `;
 
@@ -141,18 +141,15 @@ async function doInstall(projectDir, tools, subprojects = []) {
     writeFileSync(uncatPath, `# 未分类知识\n\n> execute/quick 执行中发现的坑暂存于此，用户审阅后归类到对应文件并更新 INDEX.md。\n`);
   }
 
-  // 创建 .sillyspec/.runtime/ 目录结构
+  // 创建 .sillyspec/.runtime/ 目录结构（全局状态）
   const runtimeDir = join(projectDir, '.sillyspec', '.runtime');
   for (const sub of ['artifacts', 'history', 'logs', 'templates']) {
     mkdirSync(join(runtimeDir, sub), { recursive: true });
   }
 
-  // 创建初始 progress.json
-  const progressPath = join(runtimeDir, 'progress.json');
-  if (!existsSync(progressPath)) {
-    const pm = new ProgressManager();
-    pm.init(projectDir);
-  }
+  // 创建全局状态文件
+  const pm = new ProgressManager();
+  pm.init(projectDir);
 
   // 创建初始 user-inputs.md
   const inputsPath = join(runtimeDir, 'user-inputs.md');

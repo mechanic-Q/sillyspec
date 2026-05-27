@@ -39,7 +39,7 @@ export const definition = {
       prompt: `检测已有扫描文档，只生成缺失的。
 
 ### 操作
-1. \`PROJECT=$(python3 -c "import sys,json; print(json.load(open('.sillyspec/.runtime/progress.json')).get('project',''))" 2>/dev/null || basename "$(pwd)")\`
+1. \`PROJECT=$(python3 -c "import sys,json,glob; files=glob.glob('.sillyspec/changes/*/progress.json'); print(json.load(open(files[0])).get('project','')) if files else print('')" 2>/dev/null || basename "$(pwd)")\`
 2. 检查 7 份文档是否存在：ARCHITECTURE、STRUCTURE、CONVENTIONS、INTEGRATIONS、TESTING、CONCERNS、PROJECT
 3. 列出已有 ✅ 和缺失 ⬜
 4. 只生成缺失的文档
