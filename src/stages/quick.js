@@ -68,8 +68,18 @@ export const definition = {
 4. 如果发现项目特有的坑，追加到 \`.sillyspec/knowledge/uncategorized.md\`
 5. 任务比预期复杂 → 建议用完整流程
 
+### 模块文档同步
+6. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`（不存在则跳过以下步骤）
+7. 对比本次修改的文件（\`git diff --name-only\`）与模块映射
+8. 如果命中模块 → 直接同步模块文档：
+   - 读取对应的 \`.sillyspec/docs/<project>/modules/<module>.md\`（如不存在则新建）
+   - 根据本次改动内容更新模块文档（正文描述当前状态，底部追加变更索引）
+   - 写入模块文档
+   - 将更新的模块文件加入 \`git add\`
+9. 未命中任何模块 → 跳过，不做额外操作
+
 ### 输出
-暂存确认 + 记录路径`,
+暂存确认 + 记录路径 + 模块文档同步结果（如有）`,
       outputHint: '暂存和记录确认',
       optional: false
     }

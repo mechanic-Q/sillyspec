@@ -159,6 +159,51 @@ local.yaml 生成结果（已存在/已生成）`,
       optional: false
     },
     {
+      name: '生成模块映射',
+      prompt: `生成模块映射配置文件，建立"文件路径 → 模块"的稳定映射。
+
+### 操作
+1. 检查 \.sillyspec/docs/<project>/modules/_module-map.yaml\` 是否已存在，已存在则跳过
+2. 分析项目 src/ 目录结构（或主代码目录），识别模块划分：
+   - 用 \`find . -maxdepth 2 -type d -not -path "*/node_modules/*" -not -path "*/.git/*"\` 查看目录结构
+   - 每个独立目录（有明确职责的）识别为一个模块
+   - 路径用 glob 模式（如 \`src/auth/**\`）
+3. 生成 \.sillyspec/docs/<project>/modules/_module-map.yaml\`
+4. 如果 modules/ 目录不存在，先创建
+5. 原子写入（先写 tmp 文件再 rename）
+
+### YAML 格式
+\`\`\`yaml
+# 模块映射（自动生成，可手动修改）
+# 用于 archive 阶段识别变更影响的模块
+modules:
+  <module-name>:
+    paths:
+      - <glob-pattern>
+    description: <一句话描述>
+\`\`\`
+
+### 示例
+\`\`\`yaml
+modules:
+  core:
+    paths:
+      - src/core/**
+      - src/utils/**
+    description: 核心工具和公共逻辑
+
+  stages:
+    paths:
+      - src/stages/**
+    description: 阶段定义（brainstorm/plan/execute/verify/archive等）
+\`\`\`
+
+### 输出
+_module-map.yaml 生成结果（已存在/已生成/模块列表）`,
+      outputHint: '_module-map.yaml 生成状态',
+      optional: true
+    },
+    {
       name: '自检和提交',
       prompt: `验证扫描完整性，清理并提交。
 
