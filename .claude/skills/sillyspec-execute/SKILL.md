@@ -1,6 +1,6 @@
 ---
 name: sillyspec:execute
-description: 波次执行 — 子代理并行 + 强制 TDD + 两阶段审查
+description: 用于按 plan 执行代码实现。适合用户说"开始写代码、执行任务、跑 execute、开干"。按 plan.md 中的 Wave 和 Task 逐步实现，遵循 design.md 和模块文档。
 ---
 
 ## 多变更说明

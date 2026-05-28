@@ -1,6 +1,6 @@
 ---
 name: sillyspec:archive
-description: 归档变更 — 规范沉淀，可追溯
+description: 用于归档已验证完成的变更。适合用户说"归档、archive、收尾这个变更"。执行模块影响分析 + 同步模块文档 + 移动到 archive 目录 + 更新 ROADMAP。
 ---
 
 ## 多变更说明

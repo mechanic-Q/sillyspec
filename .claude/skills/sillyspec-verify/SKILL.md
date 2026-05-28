@@ -1,6 +1,6 @@
 ---
 name: sillyspec:verify
-description: 验证实现 — 对照规范检查 + 测试套件
+description: 用于验证代码实现是否符合 design 和模块文档。适合用户说"验证下、检查下、跑 verify"。对照 design.md + 模块文档检查任务完成度、设计一致性、运行测试。
 ---
 
 ## 多变更说明

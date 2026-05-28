@@ -1,6 +1,6 @@
 ---
 name: sillyspec:plan
-description: 编写实现计划 — 2-5 分钟粒度，精确到文件路径和代码
+description: 用于把 design 拆解为可执行的实现计划。适合用户说"拆任务、做计划、排 wave、规划实现步骤"。产出 plan.md（Wave 分组 + Task 列表 + 依赖关系）。
 ---
 
 ## 多变更说明
