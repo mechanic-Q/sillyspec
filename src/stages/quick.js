@@ -14,7 +14,7 @@ export const definition = {
 3. 加载项目信息：\`cat .sillyspec/projects/*.yaml 2>/dev/null\`（了解项目结构和技术栈）
 4. 加载上下文：\`cat .sillyspec/docs/<project>/scan/CONVENTIONS.md 2>/dev/null\`
 5. 加载本地配置：\`cat .sillyspec/local.yaml 2>/dev/null\`（构建命令、测试命令、环境变量等）
-6. 如有 \`--change\`，加载设计文档：\`cat .sillyspec/changes/<变更名>/design.md 2>/dev/null\`（理解设计意图）
+6. 如有 \`--change\`，加载设计文档：\`cat .sillyspec/changes/<change-name>/design.md 2>/dev/null\`（理解设计意图）
 7. 如有需要，查询知识库：\`cat .sillyspec/knowledge/INDEX.md 2>/dev/null\`
 
 ### 创建任务记录（必须执行）
@@ -26,7 +26,7 @@ export const definition = {
    状态：进行中
    文件：<预估要改的文件>
    \`\`\`
-3. 有 \`--change\`：在 \`.sillyspec/changes/<变更名>/tasks.md\` 追加未勾选的 task
+3. 有 \`--change\`：在 \`.sillyspec/changes/<change-name>/tasks.md\` 追加未勾选的 task
 
 这样 Gate 检测到 \.sillyspec/\` 下有变更，就不会拦截后续的代码修改。
 

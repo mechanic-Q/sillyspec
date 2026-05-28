@@ -69,7 +69,9 @@ export const definition = {
     },
     {
       name: '生成规范文件',
-      prompt: `在 \`.sillyspec/changes/<变更名>/\` 下生成四个文件。
+      prompt: `在 \`.sillyspec/changes/<change-name>/\` 下生成四个文件。
+
+**⚠️ 路径注意：<change-name> 是变更目录名（如 \`2026-05-28-agent-log-streaming\`），直接放在 \`.sillyspec/changes/\` 下，不要加额外的子目录层级。正确路径示例：\`.sillyspec/changes/2026-05-28-agent-log-streaming/proposal.md\`**
 
 ### proposal.md 格式要求
 - **动机**：为什么做、解决什么核心问题

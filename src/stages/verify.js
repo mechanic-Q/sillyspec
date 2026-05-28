@@ -155,7 +155,7 @@ grep -rl "<关键词>" <源码目录>/ --include="*.java" --include="*.js" --inc
 
 ### 操作
 1. 汇总以上所有检查结果
-2. 生成 verification.md 文件，保存到 \`.sillyspec/changes/<变更名>/verification.md\`
+2. 生成 verification.md 文件，保存到 \`.sillyspec/changes/<change-name>/verification.md\`
 3. 给出结论：PASS / PASS WITH NOTES / FAIL
 
 ### verification.md 格式

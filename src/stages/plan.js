@@ -132,7 +132,7 @@ task-01 → task-03（最长路径，决定最短交付周期）
 6. 生成 Mermaid 依赖关系图
 7. 标注关键路径
 8. 评估是否需要 Spike 前置验证
-9. 保存到 \`.sillyspec/changes/<变更名>/plan.md\`
+9. 保存到变更目录下的 plan.md（路径格式：\`.sillyspec/changes/<change-name>/plan.md\`，其中 <change-name> 是变更目录名，直接使用，不加子目录。正确路径示例：\`.sillyspec/changes/2026-05-28-agent-log-streaming/plan.md\`）
 
 ### 输出
 plan.md 总览内容`,
@@ -217,7 +217,7 @@ function buildTaskPrompt(taskNum, taskName, changeDir) {
 ${taskName}
 
 ### 文件路径
-\`.sillyspec/changes/<变更名>/tasks/task-${num}.md\`
+\`.sillyspec/changes/<change-name>/tasks/task-${num}.md\`
 
 ### 格式要求（必须严格遵守）
 \`\`\`markdown

@@ -194,7 +194,7 @@ export const definition = {
    - 适合：有 UI 组件/布局/交互流程/状态转换/架构图
    - 不适合：纯后端逻辑/配置修改/无可视化意义
 2. 如果适合，生成一个独立的 HTML 文件（内联 CSS + JS），保存到：
-   \`.sillyspec/changes/<变更名>/prototype-<名称>.html\`（变更名格式：YYYY-MM-DD-<简短描述>）
+   \`.sillyspec/changes/<change-name>/prototype-<名称>.html\`（变更名格式：YYYY-MM-DD-<简短描述>）
 3. 原型要求：
    - 单文件，浏览器直接打开
    - 展示关键布局结构和交互流程
@@ -240,9 +240,9 @@ HTML 原型文件路径（或"跳过"如果不适合）`,
 11. **自审**（AI 对自身设计的校验）
 
 ### 操作
-1. 确认变更目录存在：\`mkdir -p .sillyspec/changes/<变更名>\`（Windows 用 \`mkdir .sillyspec\\changes\\<变更名>\` 或 PowerShell \`New-Item -ItemType Directory -Force -Path .sillyspec/changes/<变更名>\`）
+1. 确认变更目录存在：\`mkdir -p .sillyspec/changes/<change-name>\`（Windows 用 \`mkdir .sillyspec\\changes\\<变更名>\` 或 PowerShell \`New-Item -ItemType Directory -Force -Path .sillyspec/changes/<change-name>\`）
    - 变更名格式必须为 \`YYYY-MM-DD-<简短描述>\`（如 \`2026-05-13-user-auth\`）
-2. 将确认的设计写入 \`.sillyspec/changes/<变更名>/design.md\`
+2. 将确认的设计写入 \`.sillyspec/changes/<change-name>/design.md\`
 3. 自审检查：
    - 需求覆盖：是否完整覆盖 Step 6 确认的需求
    - 约束一致性：是否与 CONVENTIONS.md、ARCHITECTURE.md 一致
@@ -268,7 +268,7 @@ design.md 文件路径 + 自审结果
 ### 操作
 1. 展示 design.md 摘要给用户
 2. 请用户选择：✅ 确认 / ✏️ 修改 / ❌ 推翻重来
-3. 确认后，在 \`.sillyspec/changes/<变更名>/\` 下生成所有规范文件：
+3. 确认后，在 \`.sillyspec/changes/<change-name>/\` 下生成所有规范文件：
    - **design.md**：架构决策、文件变更清单、数据模型、API 设计、兼容策略、风险登记、自审
    - **proposal.md**：动机、关键问题（为什么现有方案不够）、变更范围、不在范围内（显式清单）、成功标准（可验证条件）
    - **requirements.md**：角色表 + FR 编号需求 + Given/When/Then 行为规格 + 非功能需求
