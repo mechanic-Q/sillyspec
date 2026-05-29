@@ -48,6 +48,24 @@ const fixedPrefix = [
     optional: false
   },
   {
+    name: '创建 worktree',
+    prompt: `为本次执行创建隔离的 git worktree。
+
+### 操作
+1. 运行 \`sillyspec worktree create <change-name>\`
+2. 记录输出的 worktree 路径
+3. 后续所有子代理的 cwd 设为该 worktree 路径
+4. 如果创建失败 → 报错并停止（不要在无隔离状态下继续）
+
+### 输出
+worktree 路径 + 分支名
+
+### 完成后执行
+sillyspec run execute --done --output "worktree 路径 + 分支名"`,
+    outputHint: 'worktree 路径 + 分支名',
+    optional: false
+  },
+  {
     name: '确认执行范围',
     prompt: `解析任务，确认执行范围和确认模式。
 
@@ -149,7 +167,7 @@ const fixedSuffix = [
     prompt: `检查本轮执行产生的新知识。
 
 ### 操作
-1. 检查 \`.sillyspec/knowledge/uncategorized.md\` 中待确认条目
+1. 检查 \.sillyspec/knowledge/uncategorized.md\` 中待确认条目
 2. 如有 → 提示用户审阅
 3. 用户确认后改为 [已确认]，可归类到专题文件
 
@@ -162,18 +180,29 @@ const fixedSuffix = [
     name: '完成确认',
     prompt: `所有任务完成后的收尾。
 
-### 操作
-1. 建议下一步：
-   - 运行 \`sillyspec run verify\` 进行验证（验证通过后才能归档）
-   - 如果发现问题需要修复，先修复再验证
-   - 用户也可以选择继续开发（不验证）
+### 操作（有 worktree）
+1. 运行 \`sillyspec worktree apply --check-only <change-name>\`
+2. 展示 diff 摘要（文件列表 + 变更统计）
+3. 检查结果说明（是否通过文件清单校验）
+4. 用户确认后运行 \`sillyspec worktree apply <change-name>\`
+5. apply 成功 → 自动 cleanup
+6. apply 失败 → 展示错误详情，用户选择重试或手动处理
+7. 如果用户不想 apply → 运行 \`sillyspec worktree cleanup <change-name>\` 丢弃
+8. 建议下一步：\`sillyspec run verify\`
+
+### 操作（无 worktree / --no-worktree 模式）
+1. 跳过 apply 和 cleanup 步骤（因为没有 worktree）
+2. 展示本次执行摘要
+3. 提示用户直接使用 \`git diff\` 查看变更
+4. 建议下一步：\`sillyspec run verify\`
 
 ### 输出
-用户选择 + 下一步命令
+apply 结果 + 下一步建议（或执行摘要）
 
 ### 注意
+- 如果用户不想 apply → 运行 cleanup 丢弃
 - 完成后运行 \`sillyspec run execute --done\` 即可自动推进阶段`,
-    outputHint: '用户选择',
+    outputHint: 'apply 结果',
     optional: false
   }
 ]
@@ -242,7 +271,7 @@ function parseWavesFromPlan(planContent) {
 /**
  * 为 Wave 生成 prompt（强制子代理执行）
  */
-function buildWavePrompt(wave, waveIndex, changeDir) {
+function buildWavePrompt(wave, waveIndex, changeDir, worktreePath) {
   // 构建任务摘要（不再内联完整蓝图，减少上下文污染）
   const taskSummary = wave.tasks.map((t, ti) => {
     const taskNum = String(t.index || (ti + 1)).padStart(2, '0')
@@ -260,6 +289,17 @@ function buildWavePrompt(wave, waveIndex, changeDir) {
     return s
   }).join('\n')
 
+  const worktreeSection = (worktreePath)
+    ? `
+### 工作目录
+你必须在以下 worktree 中工作（子代理的 cwd 设为此路径）：
+\`${worktreePath}\`
+
+不要在主工作区修改源码文件。所有代码变更只在 worktree 中进行。
+子代理的 cwd 参数设为 \`${worktreePath}\`。
+`
+    : ''
+
   return `## Wave ${waveIndex}: 执行以下任务
 
 ## 执行方式（必须严格遵守）
@@ -272,6 +312,7 @@ function buildWavePrompt(wave, waveIndex, changeDir) {
 3. 勾选 plan.md 中的 checkbox
 4. 记录改动文件和测试结果
 
+${worktreeSection}
 ### 任务摘要（按需读取完整蓝图）
 为每个任务启动子代理时，**只需告知任务目标和蓝图文件路径，让子代理按需读取**：
 
@@ -315,9 +356,11 @@ ${taskList}
 /**
  * 动态构建 execute 步骤列表
  * @param {string|null} planFilePath - plan 文件路径，null 则用默认 3 Wave
+ * @param {{ worktreePath?: string, noWorktree?: boolean }} options
  * @returns {Array} 步骤列表
  */
-export function buildExecuteSteps(planFilePath = null) {
+export function buildExecuteSteps(planFilePath = null, options = {}) {
+  const noWorktree = !!options.noWorktree
   let waves
   let changeDir = null
 
@@ -336,10 +379,13 @@ export function buildExecuteSteps(planFilePath = null) {
     }
   }
 
+  // 尝试获取 worktree 路径（可能由前缀步骤创建）
+  const worktreePath = options.worktreePath || null
+
   const waveSteps = waves.map((wave, i) => ({
     name: `Wave ${i + 1} 执行`,
     mode: 'implementation',
-    prompt: buildWavePrompt(wave, i + 1, changeDir),
+    prompt: buildWavePrompt(wave, i + 1, changeDir, worktreePath),
     outputHint: `Wave ${i + 1} 执行结果`,
     optional: false
   }))

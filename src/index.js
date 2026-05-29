@@ -257,6 +257,121 @@ async function main() {
       console.log('按 Ctrl+C 停止服务器');
       break;
     }
+    case 'worktree': {
+      const { WorktreeManager } = await import('./worktree.js');
+      const wtSubCmd = filteredArgs[1];
+      const wtName = filteredArgs[2];
+      const wm = new WorktreeManager({ cwd: dir });
+
+      if (!wtSubCmd || wtSubCmd === 'help' || wtSubCmd === '--help' || wtSubCmd === '-h') {
+        console.log(`
+SillySpec worktree — git worktree 隔离管理
+
+用法:
+  sillyspec worktree create <change-name> [--base <branch>]   创建隔离 worktree
+  sillyspec worktree apply <change-name> [--check-only]        校验并应用变更到主工作区
+  sillyspec worktree list                                      列出所有活跃 worktree
+  sillyspec worktree cleanup <change-name>                      强制清理 worktree
+
+选项:
+  --base <branch>       create: 指定基础分支（默认当前 HEAD）
+  --check-only          apply: 只输出检查结果，不实际 apply
+`);
+        break;
+      }
+
+      switch (wtSubCmd) {
+        case 'create': {
+          if (!wtName) {
+            console.error('❌ 用法: sillyspec worktree create <change-name> [--base <branch>]');
+            process.exit(1);
+          }
+          const baseIdx = args.indexOf('--base');
+          const base = baseIdx >= 0 && args[baseIdx + 1] ? args[baseIdx + 1] : undefined;
+          try {
+            const info = wm.create(wtName, { base });
+            console.log(`✅ worktree 已创建`);
+            console.log(`   分支: ${info.branch}`);
+            console.log(`   路径: ${info.worktreePath}`);
+            console.log(`   基准: ${info.baseHash.slice(0, 8)}`);
+          } catch (e) {
+            console.error(`❌ ${e.message}`);
+            process.exit(1);
+          }
+          break;
+        }
+        case 'apply': {
+          if (!wtName) {
+            console.error('❌ 用法: sillyspec worktree apply <change-name> [--check-only]');
+            process.exit(1);
+          }
+          const checkOnly = args.includes('--check-only');
+          const { applyWorktree } = await import('./worktree-apply.js');
+          const result = applyWorktree(wtName, { cwd: dir, checkOnly });
+
+          if (result.errors.length > 0) {
+            console.error(`❌ 校验失败:`);
+            for (const err of result.errors) {
+              console.error(`   ${err}`);
+            }
+            process.exit(1);
+          }
+
+          if (result.changedFiles.length === 0) {
+            console.log('📭 无变更需要应用');
+            break;
+          }
+
+          if (checkOnly) {
+            console.log(`✅ 检查通过 (${result.changedFiles.length} 个文件):`);
+            for (const f of result.changedFiles) {
+              console.log(`   ${f}`);
+            }
+          } else {
+            console.log(`✅ 已应用 ${result.changedFiles.length} 个文件变更`);
+          }
+          break;
+        }
+        case 'list': {
+          const items = wm.list();
+          if (items.length === 0) {
+            console.log('📭 无活跃 worktree');
+            break;
+          }
+          // 计算列宽
+          const maxName = Math.max('Change Name'.length, ...items.map(i => i.changeName.length));
+          const maxBranch = Math.max('Branch'.length, ...items.map(i => i.branch.length));
+          const header = `  ${'Change Name'.padEnd(maxName)}  ${'Branch'.padEnd(maxBranch)}  Created`;
+          const sep = `  ${'─'.repeat(maxName)}  ${'─'.repeat(maxBranch)}  ${'─'.repeat(19)}`;
+          console.log(header);
+          console.log(sep);
+          for (const item of items) {
+            const created = item.createdAt ? item.createdAt.replace('T', ' ').replace('Z', '').slice(0, 19) : '-';
+            console.log(`  ${item.changeName.padEnd(maxName)}  ${item.branch.padEnd(maxBranch)}  ${created}`);
+          }
+          break;
+        }
+        case 'cleanup': {
+          if (!wtName) {
+            console.error('❌ 用法: sillyspec worktree cleanup <change-name>');
+            process.exit(1);
+          }
+          try {
+            wm.cleanup(wtName);
+            console.log(`✅ worktree 已清理: ${wtName}`);
+          } catch (e) {
+            console.error(`❌ ${e.message}`);
+            process.exit(1);
+          }
+          break;
+        }
+        default:
+          console.error(`❌ 未知子命令: worktree ${wtSubCmd}`);
+          console.log('   运行 sillyspec worktree --help 查看帮助');
+          process.exit(1);
+      }
+      break;
+    }
     default:
       console.error(`❌ 未知命令: ${command}`);
       printUsage();

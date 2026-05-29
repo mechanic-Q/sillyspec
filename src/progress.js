@@ -11,7 +11,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, copyFileSync, unlinkSync, readdirSync } from 'fs';
-import { join, basename } from 'path';
+import { join, basename, resolve } from 'path';
 
 const RUNTIME_DIR = '.sillyspec/.runtime';
 const CHANGES_DIR = '.sillyspec/changes';
@@ -199,6 +199,7 @@ export class ProgressManager {
       const tmpPath = progressPath + '.tmp';
       writeFileSync(tmpPath, JSON.stringify(data, null, 2) + '\n');
       renameSync(tmpPath, progressPath);
+      this._updateGateStatus(cwd);
       return;
     }
 
@@ -207,6 +208,7 @@ export class ProgressManager {
     const tmpPath = progressPath + '.tmp';
     writeFileSync(tmpPath, JSON.stringify(data, null, 2) + '\n');
     renameSync(tmpPath, progressPath);
+    this._updateGateStatus(cwd);
   }
 
   _backup(cwd, data) {
@@ -691,6 +693,60 @@ export class ProgressManager {
     if (skipped > 0) parts.push(`${skipped} 跳过`);
     const suffix = parts.length ? ` (${parts.join(', ')})` : '';
     return `📊 批量进度: ${bar} ${completed}/${total}${suffix}`;
+  }
+
+  /**
+   * 更新 gate-status.json，供 worktree-guard hook 读取
+   * 扫描所有活跃变更的 currentStage，任一为 execute/quick 则 stage 设为该值
+   */
+  _updateGateStatus(cwd) {
+    const changes = this.listChanges(cwd);
+    if (changes.length === 0) {
+      // 无活跃变更，删除 gate-status（如果存在）
+      const gatePath = this._runtimePath(cwd, 'gate-status.json');
+      if (existsSync(gatePath)) {
+        try { unlinkSync(gatePath); } catch {}
+      }
+      return;
+    }
+
+    let gateStage = null;
+    let hasNoWorktree = false;
+    const activeChanges = [];
+
+    for (const cn of changes) {
+      const data = this.read(cwd, cn);
+      if (!data || !data.currentStage) continue;
+      const stage = data.currentStage;
+      if (['execute', 'quick'].includes(stage)) {
+        // 优先取 execute，其次 quick
+        if (gateStage !== 'execute' || stage === 'execute') {
+          gateStage = stage;
+        }
+        activeChanges.push(cn);
+        if (data.noWorktree) hasNoWorktree = true;
+      }
+    }
+
+    const gatePath = this._runtimePath(cwd, 'gate-status.json');
+
+    if (gateStage) {
+      this._ensureRuntimeDir(cwd);
+      const gateData = {
+        stage: gateStage,
+        changes: activeChanges,
+        updatedAt: new Date().toISOString(),
+        ...(hasNoWorktree ? { noWorktree: true } : {}),
+      };
+      const tmpPath = gatePath + '.tmp';
+      writeFileSync(tmpPath, JSON.stringify(gateData, null, 2) + '\n');
+      renameSync(tmpPath, gatePath);
+    } else {
+      // 无 execute/quick 阶段，删除 gate-status
+      if (existsSync(gatePath)) {
+        try { unlinkSync(gatePath); } catch {}
+      }
+    }
   }
 
   _ensureGitignore(cwd) {
