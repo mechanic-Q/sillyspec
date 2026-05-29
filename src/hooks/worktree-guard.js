@@ -352,7 +352,18 @@ export function shouldBlockWrite(filePath, cwd) {
   const effectiveCwd = cwd || process.cwd()
   const gateStatus = readGateStatus(effectiveCwd)
   if (!gateStatus || !ALLOWED_STAGES.includes(gateStatus.stage)) {
-    return { blocked: true, reason: `stage "${gateStatus?.stage || '(none)'}" does not allow source code writes` }
+    const stage = gateStatus?.stage || '(none)'
+    return {
+      blocked: true,
+      reason: [
+        `当前阶段 "${stage}" 不允许修改源码。`,
+        `源码修改只能在 execute 或 quick 阶段进行。`,
+        '请先完成文档规划流程：',
+        '  - 小改动：运行 sillyspec run quick',
+        '  - 大改动：运行 sillyspec run brainstorm → plan → execute',
+        '  - 或使用 sillyspec run auto 连续推进全流程',
+      ].join('\n')
+    }
   }
 
   // 3. 位置门禁
@@ -360,10 +371,24 @@ export function shouldBlockWrite(filePath, cwd) {
 
   // noWorktree 模式：无隔离环境，禁止源码写入（降级到更严格）
   if (isNoWorktreeMode(effectiveCwd)) {
-    return { blocked: true, reason: 'noWorktree mode: source code writes require isolation (use SILLYSPEC_DISABLE_HOOKS=1 to override)' }
+    return {
+      blocked: true,
+      reason: [
+        '当前处于 --no-worktree 降级模式，不允许源码写入。',
+        '如需修改源码，请移除 --no-worktree 标志重新执行。',
+        '紧急情况可设置 SILLYSPEC_DISABLE_HOOKS=1 绕过限制。',
+      ].join('\n')
+    }
   }
 
-  return { blocked: true, reason: 'source code write blocked outside worktree' }
+  return {
+    blocked: true,
+    reason: [
+      '源码修改只能在 worktree 隔离环境中进行。',
+      'execute/quick 阶段会自动创建 worktree。',
+      '如果你正在 execute 阶段，请确认 worktree 已创建：sillyspec worktree list',
+    ].join('\n')
+  }
 }
 
 /**
@@ -389,7 +414,17 @@ export function shouldBlockBash(command, cwd) {
     const localConfig = loadLocalConfig(effectiveCwd)
     const extraReadonly = localConfig.worktreeHook?.readonlyCommands || localConfig['worktree-hook']?.readonlyCommands || []
     if (matchReadonlyWhitelist(command, extraReadonly)) return { blocked: false }
-    return { blocked: true, reason: `Bash command blocked in stage "${gateStatus?.stage || '(none)'}"` }
+    const stage = gateStatus?.stage || '(none)'
+    return {
+      blocked: true,
+      reason: [
+        `当前阶段 "${stage}" 不允许执行此命令。`,
+        '源码修改只能在 execute 或 quick 阶段进行。',
+        '请先完成文档规划流程：',
+        '  - 小改动：运行 sillyspec run quick',
+        '  - 大改动：运行 sillyspec run brainstorm → plan → execute',
+      ].join('\n')
+    }
   }
 
   // execute/quick 阶段 + 主工作区
