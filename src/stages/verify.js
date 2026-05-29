@@ -2,6 +2,38 @@ export const definition = {
   name: 'verify',
   title: '验证确认',
   description: '对照规范检查 + 测试套件',
+
+  // ⛔ 全局护栏：verify 阶段禁止一切破坏性操作
+  // 子代理只能「读」和「写报告」，不能「改代码」或「改 git 状态」。
+  _globalGuardrails: `
+## ⛔ verify 阶段绝对禁止的操作
+
+以下操作在 verify 阶段**绝对禁止**，无论出于任何原因（包括「恢复文件」「修复问题」「清理目录」）：
+
+### 禁止的 Git 操作
+- git checkout（覆盖文件）
+- git restore（覆盖文件）
+- git reset（回滚提交）
+- git revert（撤销提交）
+- git clean（删除未跟踪文件）
+- git stash drop（删除 stash）
+- git branch -D（强制删除分支）
+
+### 禁止的文件操作
+- 删除任何源码文件（rm、trash）
+- 覆盖任何源码文件（cp 覆盖、echo > 覆盖）
+- 修改任何源码文件（除了 .sillyspec/ 下的报告文件）
+
+### 只允许的操作
+- git status / git diff / git show / git log / git stash list（只读）
+- cat / head / grep / find / wc（只读检查）
+- 写入 .sillyspec/changes/ 下的报告文件（verification.md）
+- 运行测试命令（不修改源码）
+- 运行 lint 命令（不自动修复）
+
+如果发现文件缺失或异常，**只报告问题，不尝试修复**。
+`,
+
   steps: [
     {
       name: '状态检查',
@@ -56,8 +88,10 @@ export const definition = {
 ### 输出
 任务完成度列表 + 完成率
 
-### 注意
-- 不修改任何代码，只做检查和报告`,
+### ⛔ 红线提醒
+- **绝对禁止** git checkout/restore/reset 或删除/覆盖任何文件
+- 发现文件缺失只报告，不尝试恢复
+- verify 阶段的唯一职责是「检查 + 报告」，不是「修复」`,
       outputHint: '任务完成度报告',
       optional: false
     },

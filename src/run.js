@@ -154,7 +154,15 @@ function outputStep(stageName, stepIndex, steps, cwd, changeName) {
     console.log(personas[stageName])
     console.log('')
   }
+  // 注入全局护栏（如 _globalGuardrails）
+  const stageDef = stageRegistry[stageName]
+  const guardrails = stageDef && stageDef._globalGuardrails ? stageDef._globalGuardrails : ''
+
   console.log(`## Step ${stepIndex + 1}/${total}: ${step.name}\n`)
+  if (guardrails) {
+    console.log(guardrails.trim())
+    console.log('')
+  }
   console.log(step.prompt)
   console.log(`\n### ⚠️ 铁律`)
   console.log('- **文档是核心资产，代码是文档的产物。** 没有文档就没有代码——文档是 AI 的记忆，是团队协作的基础，是后续维护的唯一依据。任何代码产出必须先有对应的设计/规范文档支撑。')
