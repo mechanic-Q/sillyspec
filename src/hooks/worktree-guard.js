@@ -3,6 +3,10 @@
  *
  * 三重门禁：stageGate × locationGate × fileGate
  * 纯判断模块，不做实际的 hook 注入。
+ *
+ * P0 优化：
+ * - 阶段检测 fallback：gate-status.json → progress.json currentStage
+ * - 拦截提示针对每个阶段给出具体修复建议
  */
 
 import { existsSync, readFileSync } from 'fs'
@@ -39,6 +43,41 @@ const DANGER_STASH_ACTIONS = new Set(['drop', 'clear', 'pop'])
 /** 危险命令前缀 */
 const DANGER_PREFIXES = ['sudo', 'rm -rf', 'rm -r', 'rmdir']
 
+// ── 阶段 → 拦截提示映射 ──
+
+const STAGE_HINTS = {
+  '(none)': [
+    '没有检测到活跃的 SillySpec 流程。',
+    '你需要先启动一个任务流程才能修改源码：',
+    '',
+    '  小改动（≤3 文件）：sillyspec run quick "任务描述"',
+    '  大改动（>3 文件）：sillyspec run brainstorm → plan → execute',
+    '  全自动模式：    sillyspec run auto "任务描述"',
+  ],
+  'brainstorm': [
+    '当前在 brainstorm（需求分析）阶段，这个阶段只写文档，不写代码。',
+    '完成 brainstorm 后，流程会自动推进到 plan → execute。',
+    'execute 阶段才允许写代码。',
+  ],
+  'plan': [
+    '当前在 plan（计划制定）阶段，这个阶段只写计划文档和任务蓝图，不写代码。',
+    '完成 plan 后，运行 sillyspec run execute 进入执行阶段。',
+  ],
+  'verify': [
+    '当前在 verify（验证）阶段，只做代码审查和测试验证，不修改源码。',
+    '如需修改，请先回到 execute 阶段或使用 quick 模式：',
+    '  sillyspec run quick "修改描述"',
+  ],
+  'archive': [
+    '当前在 archive（归档）阶段，不修改源码。',
+    '如需修改，请开启新变更：sillyspec run quick "修改描述"',
+  ],
+  'explore': [
+    '当前在 explore（探索）阶段，只读不写。',
+    '确认方案后使用：sillyspec run brainstorm 或 sillyspec run quick',
+  ],
+}
+
 // ── 辅助函数 ──
 
 function resolveWorktreeDir(cwd) {
@@ -58,6 +97,46 @@ function readGateStatus(cwd) {
   } catch {
     return null
   }
+}
+
+/**
+ * 从 progress.json fallback 读取 currentStage
+ * 优先级：gate-status.json > 全局 progress.json > 变更级 progress.json
+ * @param {string} cwd
+ * @returns {string|null} 阶段名，null 表示无法确定
+ */
+function readCurrentStage(cwd) {
+  // 1. gate-status.json（权威来源）
+  const gateStatus = readGateStatus(cwd)
+  if (gateStatus && gateStatus.stage) return gateStatus.stage
+
+  // 2. 全局 progress.json
+  const globalProgress = path.join(cwd, '.sillyspec', '.runtime', 'progress.json')
+  if (existsSync(globalProgress)) {
+    try {
+      const data = JSON.parse(readFileSync(globalProgress, 'utf8'))
+      if (data.currentStage) return data.currentStage
+    } catch { /* skip */ }
+  }
+
+  // 3. 变更级 progress.json（从 global.json 找到活跃变更）
+  const globalFile = path.join(cwd, '.sillyspec', '.runtime', 'global.json')
+  if (existsSync(globalFile)) {
+    try {
+      const global = JSON.parse(readFileSync(globalFile, 'utf8'))
+      const changesDir = path.join(cwd, '.sillyspec', 'changes')
+      for (const cn of (global.activeChanges || [])) {
+        const pp = path.join(changesDir, cn, 'progress.json')
+        if (!existsSync(pp)) continue
+        try {
+          const data = JSON.parse(readFileSync(pp, 'utf8'))
+          if (data.currentStage) return data.currentStage
+        } catch { /* skip */ }
+      }
+    } catch { /* skip */ }
+  }
+
+  return null
 }
 
 /**
@@ -153,7 +232,6 @@ function loadLocalConfig(cwd) {
   for (const p of candidates) {
     if (!existsSync(p)) continue
     try {
-      // 简单 YAML 解析（只处理顶层键值对和简单数组）
       const content = readFileSync(p, 'utf8')
       return parseSimpleYaml(content)
     } catch {
@@ -327,6 +405,16 @@ function matchDangerBlacklist(command) {
   return parts.some(p => isSingleCommandDangerous(p))
 }
 
+/**
+ * 构建阶段拦截提示
+ * @param {string} stage
+ * @returns {string}
+ */
+function buildStageHint(stage) {
+  const hint = STAGE_HINTS[stage] || STAGE_HINTS['(none)']
+  return hint.join('\n')
+}
+
 // ── 公共接口 ──
 
 /**
@@ -335,6 +423,10 @@ function matchDangerBlacklist(command) {
  * 降级策略（无 worktree = 更严格）:
  * - noWorktree 模式下，execute/quick 阶段不允许源码写入（没有隔离环境）
  * - 除非同时设置 SILLYSPEC_DISABLE_HOOKS=1
+ *
+ * P0 优化：
+ * - 使用 readCurrentStage() fallback 读取阶段（gate-status → progress）
+ * - 拦截提示按阶段给出具体修复建议
  *
  * @param {string} filePath - 目标文件绝对路径
  * @param {string} cwd - 当前工作目录
@@ -348,21 +440,14 @@ export function shouldBlockWrite(filePath, cwd) {
   // 1. 文件门禁：文档类/配置类始终放行
   if (matchFileWhitelist(absPath)) return { blocked: false }
 
-  // 2. 阶段门禁
+  // 2. 阶段门禁（使用 fallback 读取）
   const effectiveCwd = cwd || process.cwd()
-  const gateStatus = readGateStatus(effectiveCwd)
-  if (!gateStatus || !ALLOWED_STAGES.includes(gateStatus.stage)) {
-    const stage = gateStatus?.stage || '(none)'
+  const stage = readCurrentStage(effectiveCwd) || '(none)'
+
+  if (!ALLOWED_STAGES.includes(stage)) {
     return {
       blocked: true,
-      reason: [
-        `当前阶段 "${stage}" 不允许修改源码。`,
-        `源码修改只能在 execute 或 quick 阶段进行。`,
-        '请先完成文档规划流程：',
-        '  - 小改动：运行 sillyspec run quick',
-        '  - 大改动：运行 sillyspec run brainstorm → plan → execute',
-        '  - 或使用 sillyspec run auto 连续推进全流程',
-      ].join('\n')
+      reason: buildStageHint(stage)
     }
   }
 
@@ -385,8 +470,14 @@ export function shouldBlockWrite(filePath, cwd) {
     blocked: true,
     reason: [
       '源码修改只能在 worktree 隔离环境中进行。',
-      'execute/quick 阶段会自动创建 worktree。',
-      '如果你正在 execute 阶段，请确认 worktree 已创建：sillyspec worktree list',
+      '',
+      '你可能需要：',
+      '  1. 确认 worktree 已创建：sillyspec worktree list',
+      '  2. 如未创建，先创建：sillyspec worktree create <变更名>',
+      '  3. 在 worktree 目录中工作（子代理的 cwd 设为 worktree 路径）',
+      '',
+      '如果你在 execute 阶段，通常会自动创建 worktree。',
+      '检查是否跳过了 "创建 worktree" 步骤。',
     ].join('\n')
   }
 }
@@ -405,25 +496,18 @@ export function shouldBlockBash(command, cwd) {
   // cwd 在 worktree 内 → 全部放行
   if (isInsideWorktree(effectiveCwd)) return { blocked: false }
 
-  // 阶段门禁
-  const gateStatus = readGateStatus(effectiveCwd)
-  const stageOk = gateStatus && ALLOWED_STAGES.includes(gateStatus.stage)
+  // 阶段门禁（使用 fallback 读取）
+  const stage = readCurrentStage(effectiveCwd) || '(none)'
+  const stageOk = ALLOWED_STAGES.includes(stage)
 
   if (!stageOk) {
     // 非 execute/quick 阶段，只允许只读白名单
     const localConfig = loadLocalConfig(effectiveCwd)
     const extraReadonly = localConfig.worktreeHook?.readonlyCommands || localConfig['worktree-hook']?.readonlyCommands || []
     if (matchReadonlyWhitelist(command, extraReadonly)) return { blocked: false }
-    const stage = gateStatus?.stage || '(none)'
     return {
       blocked: true,
-      reason: [
-        `当前阶段 "${stage}" 不允许执行此命令。`,
-        '源码修改只能在 execute 或 quick 阶段进行。',
-        '请先完成文档规划流程：',
-        '  - 小改动：运行 sillyspec run quick',
-        '  - 大改动：运行 sillyspec run brainstorm → plan → execute',
-      ].join('\n')
+      reason: buildStageHint(stage)
     }
   }
 

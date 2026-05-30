@@ -141,12 +141,42 @@ export class WorktreeManager {
       throw new Error(`git worktree add 失败: ${e.stderr || e.message}`);
     }
 
+    // 5.5 自动同步远程最新代码（防止 worktree 基于过时的 commit）
+    try {
+      // 先 fetch origin
+      gitQuiet(worktreePath, 'fetch origin');
+
+      // 尝试 merge origin/main（或 origin/master）到 worktree 分支
+      const defaultBranch = gitQuiet(this.cwd, 'symbolic-ref refs/remotes/origin/HEAD --short')?.replace('origin/', '')
+        || gitQuiet(this.cwd, 'rev-parse --abbrev-ref origin/main') ? 'main'
+        : gitQuiet(this.cwd, 'rev-parse --abbrev-ref origin/master') ? 'master'
+        : null;
+
+      if (defaultBranch) {
+        // 检查 worktree 是否落后于远程
+        const localHead = gitQuiet(worktreePath, 'rev-parse HEAD');
+        const remoteHead = gitQuiet(worktreePath, `rev-parse origin/${defaultBranch}`);
+
+        if (localHead && remoteHead && localHead !== remoteHead) {
+ // 检查是否有共同祖先（避免完全不相关的分支强行 merge）
+          const mergeBase = gitQuiet(worktreePath, `merge-base ${localHead} origin/${defaultBranch}`);
+          if (mergeBase) {
+            git(worktreePath, `merge origin/${defaultBranch} --ff-only`);
+          }
+        }
+      }
+    } catch {
+ // fetch/merge 失败不影响 worktree 创建，只记录警告
+    }
+
     // 6. 写入 meta.json
     const meta = {
       changeName: name,
       branch,
       baseBranch,
       baseHash,
+      // actualBaseHash 记录 fetch+merge 后的实际 HEAD（可能与 baseHash 不同）
+      actualBaseHash: gitQuiet(worktreePath, 'rev-parse HEAD') || baseHash,
       createdAt: new Date().toISOString(),
       worktreePath,
     };
