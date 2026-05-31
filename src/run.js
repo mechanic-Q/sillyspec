@@ -267,7 +267,11 @@ export async function runCommand(args, cwd) {
     const autoChange = changeName || resolveChangeNameAuto(cwd)
     if (autoChange) {
       progress = await pm.initChange(cwd, autoChange)
-    } else if (!isAuxiliary) {
+    } else if (isAuxiliary) {
+      // 辅助阶段（scan/explore/quick/doctor/status）不需要 currentChange
+      // 但仍然需要初始化一个空的 progress 对象以避免后续引用报错
+      progress = { currentStage: stageName, stages: {}, lastActive: new Date().toLocaleString('zh-CN', { hour12: false }) }
+    } else {
       // brainstorm / propose 作为流程入口，自动生成变更名并初始化
       if (stageName === 'brainstorm' || stageName === 'propose') {
         const date = new Date().toISOString().slice(0, 10)
@@ -304,10 +308,10 @@ export async function runCommand(args, cwd) {
 
   // 确保步骤已初始化
   const changed = await ensureStageSteps(progress, stageName, cwd)
-  if (changed) {
+  if (changed && effectiveChange) {
     await pm._write(cwd, progress, effectiveChange)
     triggerSync(cwd, effectiveChange)
-    progress = await pm.read(cwd, effectiveChange)
+    progress = await pm.read(cwd, effectiveChange) || progress
   }
 
   // --status
