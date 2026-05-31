@@ -19,7 +19,7 @@ const CHANGES_DIR = '.sillyspec/changes';
 const GLOBAL_FILE = 'global.json';
 const PROGRESS_FILE = 'progress.json';
 const CURRENT_VERSION = 3;
-const VALID_STAGES = ['scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore'];
+const VALID_STAGES = ['scan', 'brainstorm', 'propose', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore'];
 const VALID_STATUSES = ['pending', 'in-progress', 'completed', 'failed', 'blocked'];
 
 const STAGE_LABELS = {

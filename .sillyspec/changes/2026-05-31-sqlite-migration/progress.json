@@ -1,0 +1,249 @@
+{
+  "_version": 3,
+  "project": "sillyspec",
+  "currentStage": "execute",
+  "currentChange": "2026-05-31-sqlite-migration",
+  "stages": {
+    "scan": {
+      "status": "pending",
+      "steps": [],
+      "startedAt": null,
+      "completedAt": null
+    },
+    "brainstorm": {
+      "status": "completed",
+      "startedAt": "2026/5/31 10:45:22",
+      "completedAt": "2026/5/31 10:51:36",
+      "steps": [
+        {
+          "name": "状态检查",
+          "status": "completed",
+          "completedAt": "2026/5/31 10:45:25",
+          "output": "状态检查完成：sillyspec 项目，2026-05-31-sqlite-migration 变更处于 brainstorm 阶段 Step 1/10"
+        },
+        {
+          "name": "加载项目上下文",
+          "status": "completed",
+          "completedAt": "2026/5/31 10:45:34",
+          "output": "上下文加载完成：sillyspec 是纯 Node.js CLI 项目，零依赖，src/ 下 11 个模块。核心是 progress.js（ProgressManager）管理所有状态，run.js 负责阶段执行。当前有 7 个活跃变更。单项目模式，子项目为 sillyspec 自身。"
+        },
+        {
+          "name": "协作与复用检查",
+          "status": "completed",
+          "completedAt": "2026/5/31 10:45:37",
+          "output": "协作检查完成：无冲突变更，无全局模板。已创建的变更（auto-mode、unified-docs-design、run-command-design）与此无关。"
+        },
+        {
+          "name": "原型/设计图分析",
+          "status": "completed",
+          "completedAt": "2026/5/31 10:45:39",
+          "output": "无原型/设计图，跳过"
+        },
+        {
+          "name": "需求范围评估",
+          "status": "completed",
+          "completedAt": "2026/5/31 10:45:41",
+          "output": "范围评估完成：单模块改造（ProgressManager 重写 + SQLite 引入 + 平台同步层），不拆分，不走批量模式。"
+        },
+        {
+          "name": "对话式探索",
+          "status": "completed",
+          "completedAt": "2026/5/31 10:47:54",
+          "output": "决策确认：1) SQLite 依赖用 sql.js（纯 WASM，零原生依赖）；2) 不支持旧版 progress.json 迁移，全新安装直接用 SQLite"
+        },
+        {
+          "name": "提出 2-3 种方案",
+          "status": "completed",
+          "completedAt": "2026/5/31 10:48:05",
+          "output": "方案设计完成，提出两种方案：A) 全量 SQLite 替代（global.json + progress.json + artifacts + history + user-inputs 全部入库）；B) 最小化 SQLite（只替代 progress.json 主体，gate-status 仍从 DB 生成，artifacts/history/user-inputs 保持文件系统）。推荐方案 B…"
+        },
+        {
+          "name": "分段展示设计",
+          "status": "completed",
+          "completedAt": "2026/5/31 10:50:54",
+          "output": "设计方案确认完毕：方案B 最小化 SQLite。1) Schema: project/changes/stages/steps/batch_progress/approvals 六张表；2) ProgressManager 原地改造，API 不变；3) 新增 db.js + sync.js；4) gate-status 从 DB 生成；5) 平台同步独立模块，不耦合 ProgressManager…"
+        },
+        {
+          "name": "HTML 原型生成",
+          "status": "completed",
+          "completedAt": "2026/5/31 10:50:56",
+          "output": "跳过原型：纯后端改造（ProgressManager 重写 + SQLite），无可视化内容。"
+        },
+        {
+          "name": "用户确认并生成规范文件",
+          "status": "completed",
+          "completedAt": "2026/5/31 10:51:36",
+          "output": "四件套已生成并 git add：proposal.md + design.md + requirements.md + tasks.md（15 个 task）。等待用户确认。"
+        }
+      ]
+    },
+    "propose": {
+      "status": "pending",
+      "steps": [],
+      "startedAt": null,
+      "completedAt": null
+    },
+    "plan": {
+      "status": "completed",
+      "startedAt": "2026/5/31 10:53:06",
+      "completedAt": "2026/5/31 10:57:47",
+      "steps": [
+        {
+          "name": "状态检查",
+          "status": "completed",
+          "completedAt": "2026/5/31 10:53:08",
+          "output": "状态确认：brainstorm 完成，进入 plan 阶段"
+        },
+        {
+          "name": "加载上下文",
+          "status": "completed",
+          "completedAt": "2026/5/31 10:53:19",
+          "output": "上下文加载完成：proposal.md + design.md + requirements.md + tasks.md + stages 模块文档。无 local.yaml（无构建/测试配置）。"
+        },
+        {
+          "name": "锚定确认",
+          "status": "completed",
+          "completedAt": "2026/5/31 10:53:21",
+          "output": "文件确认：proposal.md ✅ design.md ✅ requirements.md ✅ tasks.md ✅ _module-map.yaml ✅ stages模块.md ✅ local.yaml ❌ CONVENTIONS.md ❌ ARCHITECTURE.md ❌ STACK.md ❌ runtime模块.md ❌ cli-entry模块.md ❌"
+        },
+        {
+          "name": "展开任务并分组",
+          "status": "completed",
+          "completedAt": "2026/5/31 10:53:39",
+          "output": "plan.md 生成完成：5 个 Wave、15 个 task、2 个 Spike。关键路径：task-01→02→07→13→14。"
+        },
+        {
+          "name": "自检总览",
+          "status": "completed",
+          "completedAt": "2026/5/31 10:53:41",
+          "output": "自检通过：全部 9 项检查 OK"
+        },
+        {
+          "name": "生成任务蓝图（子代理并行）",
+          "status": "completed",
+          "prompt": "为 plan.md 中的每个任务生成独立蓝图文件。\n\n## 任务清单\n- task-01: 安装 sql.js 依赖，验证 WASM 加载和基础 CRUD\n- task-02: 新增 src/db.js — SQLite 初始化、连接管理、事务包装、schema 创建\n- task-03: 改造 src/progress.js — readGlobal/writeGlobal 改为 SQL\n- task-04: 改造 src/progress.js — listChanges/registerChange/unregisterChange/initChange 改为 SQL\n- task-05: 改造 src/progress.js — setStage/addStep/updateStep/completeStage 改为 SQL\n- task-06: 改造 src/progress.js — _updateGateStatus 从 DB 查询生成 gate-status.json\n- task-07: 改造 src/progress.js — read/_write 改为 SQL，read() 返回值兼容性验证\n- task-08: 改造 src/progress.js — 删除 _parseWithRecovery/_backup/_migrateIfNeeded\n- task-09: 改造 src/init.js — init 时创建 SQLite 而非 global.json\n- task-10: 改造 src/index.js — 新增 sillyspec platform 命令组解析\n- task-11: 新增 src/sync.js — 平台同步模块\n- task-12: 改造 src/run.js — _write 后触发同步、execute 前检查审批\n- task-13: 单元测试 — read() 返回结构与现有 JSON 一致性验证\n- task-14: 集成测试 — init + brainstorm → plan → execute → verify → archive 全流程\n- task-15: 更新 docs/sillyspec/file-lifecycle.md 文档\n\n## 执行方式（必须严格遵守）\n\n**你必须使用 Agent tool 启动子代理来写每个蓝图，不要自己写。**\n\n1. 确认 `/Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/` 目录存在（不存在则创建）\n2. 为每个任务启动一个独立子代理（Agent tool），可并行启动多个\n3. 每个子代理使用对应的 prompt（见下方模板）\n4. 等待所有子代理完成\n5. 验证每个 task-N.md 文件已生成且非空\n\n### 子代理 prompt 模板\n为每个任务使用以下 prompt 启动子代理：\n\n```\n任务编号：task-01\n任务名称：安装 sql.js 依赖，验证 WASM 加载和基础 CRUD\n文件路径：/Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-01.md\n\n操作：\n1. 读取 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/design.md 和 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/plan.md 了解上下文\n2. 读取相关源文件了解现有代码\n3. 按以下格式编写任务蓝图并保存到 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-01.md：\n\n---\nid: task-01\ntitle: 安装 sql.js 依赖，验证 WASM 加载和基础 CRUD\npriority: P0/P1/P2\nestimated_hours: N\ndepends_on: [task-XX]\nblocks: [task-XX]\nallowed_paths:\n  - ...\n---\n\n# task-01: 安装 sql.js 依赖，验证 WASM 加载和基础 CRUD\n\n## 修改文件（必填）\n- 精确到文件路径\n\n## 实现要求\n1. 具体做什么\n\n## 接口定义（代码类任务必填）\n方法签名、数据结构、控制流伪代码\n\n## 边界处理（必填）\n- null/空值行为\n- 兼容旧行为（brownfield：未配置新功能时行为不变）\n- 异常不静默吞掉（明确返回值或抛出）\n- 不修改传入参数\n- 歧义/冲突场景的处理策略\n\n## 非目标（本任务不做的事）\n- 明确边界，防止 scope creep\n\n## 参考\n- 可参考的模式\n\n## TDD 步骤\n1. 写测试 → 2. 确认失败 → 3. 写代码 → 4. 确认通过 → 5. 回归\n\n## 验收标准\n| # | 验证步骤 | 通过标准 |\n|---|---|---|\n| AC-01 | ... | ... |\n\n关键规则：\n- 必须独立完整，execute 子代理只读这一个文件就能干活\n- 不要依赖其他 task-N.md 的内容\n- 接口定义写到\"搬砖工照着做\"的程度\n- 边界处理至少 5 条\n- 验收标准用表格，禁止笼统表述\n- 写完后用 Write tool 保存到文件\n```\n\n```\n任务编号：task-02\n任务名称：新增 src/db.js — SQLite 初始化、连接管理、事务包装、schema 创建\n文件路径：/Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-02.md\n\n操作：\n1. 读取 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/design.md 和 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/plan.md 了解上下文\n2. 读取相关源文件了解现有代码\n3. 按以下格式编写任务蓝图并保存到 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-02.md：\n\n---\nid: task-02\ntitle: 新增 src/db.js — SQLite 初始化、连接管理、事务包装、schema 创建\npriority: P0/P1/P2\nestimated_hours: N\ndepends_on: [task-XX]\nblocks: [task-XX]\nallowed_paths:\n  - ...\n---\n\n# task-02: 新增 src/db.js — SQLite 初始化、连接管理、事务包装、schema 创建\n\n## 修改文件（必填）\n- 精确到文件路径\n\n## 实现要求\n1. 具体做什么\n\n## 接口定义（代码类任务必填）\n方法签名、数据结构、控制流伪代码\n\n## 边界处理（必填）\n- null/空值行为\n- 兼容旧行为（brownfield：未配置新功能时行为不变）\n- 异常不静默吞掉（明确返回值或抛出）\n- 不修改传入参数\n- 歧义/冲突场景的处理策略\n\n## 非目标（本任务不做的事）\n- 明确边界，防止 scope creep\n\n## 参考\n- 可参考的模式\n\n## TDD 步骤\n1. 写测试 → 2. 确认失败 → 3. 写代码 → 4. 确认通过 → 5. 回归\n\n## 验收标准\n| # | 验证步骤 | 通过标准 |\n|---|---|---|\n| AC-01 | ... | ... |\n\n关键规则：\n- 必须独立完整，execute 子代理只读这一个文件就能干活\n- 不要依赖其他 task-N.md 的内容\n- 接口定义写到\"搬砖工照着做\"的程度\n- 边界处理至少 5 条\n- 验收标准用表格，禁止笼统表述\n- 写完后用 Write tool 保存到文件\n```\n\n```\n任务编号：task-03\n任务名称：改造 src/progress.js — readGlobal/writeGlobal 改为 SQL\n文件路径：/Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-03.md\n\n操作：\n1. 读取 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/design.md 和 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/plan.md 了解上下文\n2. 读取相关源文件了解现有代码\n3. 按以下格式编写任务蓝图并保存到 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-03.md：\n\n---\nid: task-03\ntitle: 改造 src/progress.js — readGlobal/writeGlobal 改为 SQL\npriority: P0/P1/P2\nestimated_hours: N\ndepends_on: [task-XX]\nblocks: [task-XX]\nallowed_paths:\n  - ...\n---\n\n# task-03: 改造 src/progress.js — readGlobal/writeGlobal 改为 SQL\n\n## 修改文件（必填）\n- 精确到文件路径\n\n## 实现要求\n1. 具体做什么\n\n## 接口定义（代码类任务必填）\n方法签名、数据结构、控制流伪代码\n\n## 边界处理（必填）\n- null/空值行为\n- 兼容旧行为（brownfield：未配置新功能时行为不变）\n- 异常不静默吞掉（明确返回值或抛出）\n- 不修改传入参数\n- 歧义/冲突场景的处理策略\n\n## 非目标（本任务不做的事）\n- 明确边界，防止 scope creep\n\n## 参考\n- 可参考的模式\n\n## TDD 步骤\n1. 写测试 → 2. 确认失败 → 3. 写代码 → 4. 确认通过 → 5. 回归\n\n## 验收标准\n| # | 验证步骤 | 通过标准 |\n|---|---|---|\n| AC-01 | ... | ... |\n\n关键规则：\n- 必须独立完整，execute 子代理只读这一个文件就能干活\n- 不要依赖其他 task-N.md 的内容\n- 接口定义写到\"搬砖工照着做\"的程度\n- 边界处理至少 5 条\n- 验收标准用表格，禁止笼统表述\n- 写完后用 Write tool 保存到文件\n```\n\n```\n任务编号：task-04\n任务名称：改造 src/progress.js — listChanges/registerChange/unregisterChange/initChange 改为 SQL\n文件路径：/Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-04.md\n\n操作：\n1. 读取 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/design.md 和 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/plan.md 了解上下文\n2. 读取相关源文件了解现有代码\n3. 按以下格式编写任务蓝图并保存到 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-04.md：\n\n---\nid: task-04\ntitle: 改造 src/progress.js — listChanges/registerChange/unregisterChange/initChange 改为 SQL\npriority: P0/P1/P2\nestimated_hours: N\ndepends_on: [task-XX]\nblocks: [task-XX]\nallowed_paths:\n  - ...\n---\n\n# task-04: 改造 src/progress.js — listChanges/registerChange/unregisterChange/initChange 改为 SQL\n\n## 修改文件（必填）\n- 精确到文件路径\n\n## 实现要求\n1. 具体做什么\n\n## 接口定义（代码类任务必填）\n方法签名、数据结构、控制流伪代码\n\n## 边界处理（必填）\n- null/空值行为\n- 兼容旧行为（brownfield：未配置新功能时行为不变）\n- 异常不静默吞掉（明确返回值或抛出）\n- 不修改传入参数\n- 歧义/冲突场景的处理策略\n\n## 非目标（本任务不做的事）\n- 明确边界，防止 scope creep\n\n## 参考\n- 可参考的模式\n\n## TDD 步骤\n1. 写测试 → 2. 确认失败 → 3. 写代码 → 4. 确认通过 → 5. 回归\n\n## 验收标准\n| # | 验证步骤 | 通过标准 |\n|---|---|---|\n| AC-01 | ... | ... |\n\n关键规则：\n- 必须独立完整，execute 子代理只读这一个文件就能干活\n- 不要依赖其他 task-N.md 的内容\n- 接口定义写到\"搬砖工照着做\"的程度\n- 边界处理至少 5 条\n- 验收标准用表格，禁止笼统表述\n- 写完后用 Write tool 保存到文件\n```\n\n```\n任务编号：task-05\n任务名称：改造 src/progress.js — setStage/addStep/updateStep/completeStage 改为 SQL\n文件路径：/Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-05.md\n\n操作：\n1. 读取 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/design.md 和 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/plan.md 了解上下文\n2. 读取相关源文件了解现有代码\n3. 按以下格式编写任务蓝图并保存到 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-05.md：\n\n---\nid: task-05\ntitle: 改造 src/progress.js — setStage/addStep/updateStep/completeStage 改为 SQL\npriority: P0/P1/P2\nestimated_hours: N\ndepends_on: [task-XX]\nblocks: [task-XX]\nallowed_paths:\n  - ...\n---\n\n# task-05: 改造 src/progress.js — setStage/addStep/updateStep/completeStage 改为 SQL\n\n## 修改文件（必填）\n- 精确到文件路径\n\n## 实现要求\n1. 具体做什么\n\n## 接口定义（代码类任务必填）\n方法签名、数据结构、控制流伪代码\n\n## 边界处理（必填）\n- null/空值行为\n- 兼容旧行为（brownfield：未配置新功能时行为不变）\n- 异常不静默吞掉（明确返回值或抛出）\n- 不修改传入参数\n- 歧义/冲突场景的处理策略\n\n## 非目标（本任务不做的事）\n- 明确边界，防止 scope creep\n\n## 参考\n- 可参考的模式\n\n## TDD 步骤\n1. 写测试 → 2. 确认失败 → 3. 写代码 → 4. 确认通过 → 5. 回归\n\n## 验收标准\n| # | 验证步骤 | 通过标准 |\n|---|---|---|\n| AC-01 | ... | ... |\n\n关键规则：\n- 必须独立完整，execute 子代理只读这一个文件就能干活\n- 不要依赖其他 task-N.md 的内容\n- 接口定义写到\"搬砖工照着做\"的程度\n- 边界处理至少 5 条\n- 验收标准用表格，禁止笼统表述\n- 写完后用 Write tool 保存到文件\n```\n\n```\n任务编号：task-06\n任务名称：改造 src/progress.js — _updateGateStatus 从 DB 查询生成 gate-status.json\n文件路径：/Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-06.md\n\n操作：\n1. 读取 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/design.md 和 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/plan.md 了解上下文\n2. 读取相关源文件了解现有代码\n3. 按以下格式编写任务蓝图并保存到 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-06.md：\n\n---\nid: task-06\ntitle: 改造 src/progress.js — _updateGateStatus 从 DB 查询生成 gate-status.json\npriority: P0/P1/P2\nestimated_hours: N\ndepends_on: [task-XX]\nblocks: [task-XX]\nallowed_paths:\n  - ...\n---\n\n# task-06: 改造 src/progress.js — _updateGateStatus 从 DB 查询生成 gate-status.json\n\n## 修改文件（必填）\n- 精确到文件路径\n\n## 实现要求\n1. 具体做什么\n\n## 接口定义（代码类任务必填）\n方法签名、数据结构、控制流伪代码\n\n## 边界处理（必填）\n- null/空值行为\n- 兼容旧行为（brownfield：未配置新功能时行为不变）\n- 异常不静默吞掉（明确返回值或抛出）\n- 不修改传入参数\n- 歧义/冲突场景的处理策略\n\n## 非目标（本任务不做的事）\n- 明确边界，防止 scope creep\n\n## 参考\n- 可参考的模式\n\n## TDD 步骤\n1. 写测试 → 2. 确认失败 → 3. 写代码 → 4. 确认通过 → 5. 回归\n\n## 验收标准\n| # | 验证步骤 | 通过标准 |\n|---|---|---|\n| AC-01 | ... | ... |\n\n关键规则：\n- 必须独立完整，execute 子代理只读这一个文件就能干活\n- 不要依赖其他 task-N.md 的内容\n- 接口定义写到\"搬砖工照着做\"的程度\n- 边界处理至少 5 条\n- 验收标准用表格，禁止笼统表述\n- 写完后用 Write tool 保存到文件\n```\n\n```\n任务编号：task-07\n任务名称：改造 src/progress.js — read/_write 改为 SQL，read() 返回值兼容性验证\n文件路径：/Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-07.md\n\n操作：\n1. 读取 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/design.md 和 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/plan.md 了解上下文\n2. 读取相关源文件了解现有代码\n3. 按以下格式编写任务蓝图并保存到 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-07.md：\n\n---\nid: task-07\ntitle: 改造 src/progress.js — read/_write 改为 SQL，read() 返回值兼容性验证\npriority: P0/P1/P2\nestimated_hours: N\ndepends_on: [task-XX]\nblocks: [task-XX]\nallowed_paths:\n  - ...\n---\n\n# task-07: 改造 src/progress.js — read/_write 改为 SQL，read() 返回值兼容性验证\n\n## 修改文件（必填）\n- 精确到文件路径\n\n## 实现要求\n1. 具体做什么\n\n## 接口定义（代码类任务必填）\n方法签名、数据结构、控制流伪代码\n\n## 边界处理（必填）\n- null/空值行为\n- 兼容旧行为（brownfield：未配置新功能时行为不变）\n- 异常不静默吞掉（明确返回值或抛出）\n- 不修改传入参数\n- 歧义/冲突场景的处理策略\n\n## 非目标（本任务不做的事）\n- 明确边界，防止 scope creep\n\n## 参考\n- 可参考的模式\n\n## TDD 步骤\n1. 写测试 → 2. 确认失败 → 3. 写代码 → 4. 确认通过 → 5. 回归\n\n## 验收标准\n| # | 验证步骤 | 通过标准 |\n|---|---|---|\n| AC-01 | ... | ... |\n\n关键规则：\n- 必须独立完整，execute 子代理只读这一个文件就能干活\n- 不要依赖其他 task-N.md 的内容\n- 接口定义写到\"搬砖工照着做\"的程度\n- 边界处理至少 5 条\n- 验收标准用表格，禁止笼统表述\n- 写完后用 Write tool 保存到文件\n```\n\n```\n任务编号：task-08\n任务名称：改造 src/progress.js — 删除 _parseWithRecovery/_backup/_migrateIfNeeded\n文件路径：/Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-08.md\n\n操作：\n1. 读取 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/design.md 和 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/plan.md 了解上下文\n2. 读取相关源文件了解现有代码\n3. 按以下格式编写任务蓝图并保存到 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-08.md：\n\n---\nid: task-08\ntitle: 改造 src/progress.js — 删除 _parseWithRecovery/_backup/_migrateIfNeeded\npriority: P0/P1/P2\nestimated_hours: N\ndepends_on: [task-XX]\nblocks: [task-XX]\nallowed_paths:\n  - ...\n---\n\n# task-08: 改造 src/progress.js — 删除 _parseWithRecovery/_backup/_migrateIfNeeded\n\n## 修改文件（必填）\n- 精确到文件路径\n\n## 实现要求\n1. 具体做什么\n\n## 接口定义（代码类任务必填）\n方法签名、数据结构、控制流伪代码\n\n## 边界处理（必填）\n- null/空值行为\n- 兼容旧行为（brownfield：未配置新功能时行为不变）\n- 异常不静默吞掉（明确返回值或抛出）\n- 不修改传入参数\n- 歧义/冲突场景的处理策略\n\n## 非目标（本任务不做的事）\n- 明确边界，防止 scope creep\n\n## 参考\n- 可参考的模式\n\n## TDD 步骤\n1. 写测试 → 2. 确认失败 → 3. 写代码 → 4. 确认通过 → 5. 回归\n\n## 验收标准\n| # | 验证步骤 | 通过标准 |\n|---|---|---|\n| AC-01 | ... | ... |\n\n关键规则：\n- 必须独立完整，execute 子代理只读这一个文件就能干活\n- 不要依赖其他 task-N.md 的内容\n- 接口定义写到\"搬砖工照着做\"的程度\n- 边界处理至少 5 条\n- 验收标准用表格，禁止笼统表述\n- 写完后用 Write tool 保存到文件\n```\n\n```\n任务编号：task-09\n任务名称：改造 src/init.js — init 时创建 SQLite 而非 global.json\n文件路径：/Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-09.md\n\n操作：\n1. 读取 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/design.md 和 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/plan.md 了解上下文\n2. 读取相关源文件了解现有代码\n3. 按以下格式编写任务蓝图并保存到 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-09.md：\n\n---\nid: task-09\ntitle: 改造 src/init.js — init 时创建 SQLite 而非 global.json\npriority: P0/P1/P2\nestimated_hours: N\ndepends_on: [task-XX]\nblocks: [task-XX]\nallowed_paths:\n  - ...\n---\n\n# task-09: 改造 src/init.js — init 时创建 SQLite 而非 global.json\n\n## 修改文件（必填）\n- 精确到文件路径\n\n## 实现要求\n1. 具体做什么\n\n## 接口定义（代码类任务必填）\n方法签名、数据结构、控制流伪代码\n\n## 边界处理（必填）\n- null/空值行为\n- 兼容旧行为（brownfield：未配置新功能时行为不变）\n- 异常不静默吞掉（明确返回值或抛出）\n- 不修改传入参数\n- 歧义/冲突场景的处理策略\n\n## 非目标（本任务不做的事）\n- 明确边界，防止 scope creep\n\n## 参考\n- 可参考的模式\n\n## TDD 步骤\n1. 写测试 → 2. 确认失败 → 3. 写代码 → 4. 确认通过 → 5. 回归\n\n## 验收标准\n| # | 验证步骤 | 通过标准 |\n|---|---|---|\n| AC-01 | ... | ... |\n\n关键规则：\n- 必须独立完整，execute 子代理只读这一个文件就能干活\n- 不要依赖其他 task-N.md 的内容\n- 接口定义写到\"搬砖工照着做\"的程度\n- 边界处理至少 5 条\n- 验收标准用表格，禁止笼统表述\n- 写完后用 Write tool 保存到文件\n```\n\n```\n任务编号：task-10\n任务名称：改造 src/index.js — 新增 sillyspec platform 命令组解析\n文件路径：/Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-10.md\n\n操作：\n1. 读取 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/design.md 和 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/plan.md 了解上下文\n2. 读取相关源文件了解现有代码\n3. 按以下格式编写任务蓝图并保存到 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-10.md：\n\n---\nid: task-10\ntitle: 改造 src/index.js — 新增 sillyspec platform 命令组解析\npriority: P0/P1/P2\nestimated_hours: N\ndepends_on: [task-XX]\nblocks: [task-XX]\nallowed_paths:\n  - ...\n---\n\n# task-10: 改造 src/index.js — 新增 sillyspec platform 命令组解析\n\n## 修改文件（必填）\n- 精确到文件路径\n\n## 实现要求\n1. 具体做什么\n\n## 接口定义（代码类任务必填）\n方法签名、数据结构、控制流伪代码\n\n## 边界处理（必填）\n- null/空值行为\n- 兼容旧行为（brownfield：未配置新功能时行为不变）\n- 异常不静默吞掉（明确返回值或抛出）\n- 不修改传入参数\n- 歧义/冲突场景的处理策略\n\n## 非目标（本任务不做的事）\n- 明确边界，防止 scope creep\n\n## 参考\n- 可参考的模式\n\n## TDD 步骤\n1. 写测试 → 2. 确认失败 → 3. 写代码 → 4. 确认通过 → 5. 回归\n\n## 验收标准\n| # | 验证步骤 | 通过标准 |\n|---|---|---|\n| AC-01 | ... | ... |\n\n关键规则：\n- 必须独立完整，execute 子代理只读这一个文件就能干活\n- 不要依赖其他 task-N.md 的内容\n- 接口定义写到\"搬砖工照着做\"的程度\n- 边界处理至少 5 条\n- 验收标准用表格，禁止笼统表述\n- 写完后用 Write tool 保存到文件\n```\n\n```\n任务编号：task-11\n任务名称：新增 src/sync.js — 平台同步模块\n文件路径：/Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-11.md\n\n操作：\n1. 读取 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/design.md 和 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/plan.md 了解上下文\n2. 读取相关源文件了解现有代码\n3. 按以下格式编写任务蓝图并保存到 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-11.md：\n\n---\nid: task-11\ntitle: 新增 src/sync.js — 平台同步模块\npriority: P0/P1/P2\nestimated_hours: N\ndepends_on: [task-XX]\nblocks: [task-XX]\nallowed_paths:\n  - ...\n---\n\n# task-11: 新增 src/sync.js — 平台同步模块\n\n## 修改文件（必填）\n- 精确到文件路径\n\n## 实现要求\n1. 具体做什么\n\n## 接口定义（代码类任务必填）\n方法签名、数据结构、控制流伪代码\n\n## 边界处理（必填）\n- null/空值行为\n- 兼容旧行为（brownfield：未配置新功能时行为不变）\n- 异常不静默吞掉（明确返回值或抛出）\n- 不修改传入参数\n- 歧义/冲突场景的处理策略\n\n## 非目标（本任务不做的事）\n- 明确边界，防止 scope creep\n\n## 参考\n- 可参考的模式\n\n## TDD 步骤\n1. 写测试 → 2. 确认失败 → 3. 写代码 → 4. 确认通过 → 5. 回归\n\n## 验收标准\n| # | 验证步骤 | 通过标准 |\n|---|---|---|\n| AC-01 | ... | ... |\n\n关键规则：\n- 必须独立完整，execute 子代理只读这一个文件就能干活\n- 不要依赖其他 task-N.md 的内容\n- 接口定义写到\"搬砖工照着做\"的程度\n- 边界处理至少 5 条\n- 验收标准用表格，禁止笼统表述\n- 写完后用 Write tool 保存到文件\n```\n\n```\n任务编号：task-12\n任务名称：改造 src/run.js — _write 后触发同步、execute 前检查审批\n文件路径：/Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-12.md\n\n操作：\n1. 读取 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/design.md 和 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/plan.md 了解上下文\n2. 读取相关源文件了解现有代码\n3. 按以下格式编写任务蓝图并保存到 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-12.md：\n\n---\nid: task-12\ntitle: 改造 src/run.js — _write 后触发同步、execute 前检查审批\npriority: P0/P1/P2\nestimated_hours: N\ndepends_on: [task-XX]\nblocks: [task-XX]\nallowed_paths:\n  - ...\n---\n\n# task-12: 改造 src/run.js — _write 后触发同步、execute 前检查审批\n\n## 修改文件（必填）\n- 精确到文件路径\n\n## 实现要求\n1. 具体做什么\n\n## 接口定义（代码类任务必填）\n方法签名、数据结构、控制流伪代码\n\n## 边界处理（必填）\n- null/空值行为\n- 兼容旧行为（brownfield：未配置新功能时行为不变）\n- 异常不静默吞掉（明确返回值或抛出）\n- 不修改传入参数\n- 歧义/冲突场景的处理策略\n\n## 非目标（本任务不做的事）\n- 明确边界，防止 scope creep\n\n## 参考\n- 可参考的模式\n\n## TDD 步骤\n1. 写测试 → 2. 确认失败 → 3. 写代码 → 4. 确认通过 → 5. 回归\n\n## 验收标准\n| # | 验证步骤 | 通过标准 |\n|---|---|---|\n| AC-01 | ... | ... |\n\n关键规则：\n- 必须独立完整，execute 子代理只读这一个文件就能干活\n- 不要依赖其他 task-N.md 的内容\n- 接口定义写到\"搬砖工照着做\"的程度\n- 边界处理至少 5 条\n- 验收标准用表格，禁止笼统表述\n- 写完后用 Write tool 保存到文件\n```\n\n```\n任务编号：task-13\n任务名称：单元测试 — read() 返回结构与现有 JSON 一致性验证\n文件路径：/Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-13.md\n\n操作：\n1. 读取 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/design.md 和 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/plan.md 了解上下文\n2. 读取相关源文件了解现有代码\n3. 按以下格式编写任务蓝图并保存到 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-13.md：\n\n---\nid: task-13\ntitle: 单元测试 — read() 返回结构与现有 JSON 一致性验证\npriority: P0/P1/P2\nestimated_hours: N\ndepends_on: [task-XX]\nblocks: [task-XX]\nallowed_paths:\n  - ...\n---\n\n# task-13: 单元测试 — read() 返回结构与现有 JSON 一致性验证\n\n## 修改文件（必填）\n- 精确到文件路径\n\n## 实现要求\n1. 具体做什么\n\n## 接口定义（代码类任务必填）\n方法签名、数据结构、控制流伪代码\n\n## 边界处理（必填）\n- null/空值行为\n- 兼容旧行为（brownfield：未配置新功能时行为不变）\n- 异常不静默吞掉（明确返回值或抛出）\n- 不修改传入参数\n- 歧义/冲突场景的处理策略\n\n## 非目标（本任务不做的事）\n- 明确边界，防止 scope creep\n\n## 参考\n- 可参考的模式\n\n## TDD 步骤\n1. 写测试 → 2. 确认失败 → 3. 写代码 → 4. 确认通过 → 5. 回归\n\n## 验收标准\n| # | 验证步骤 | 通过标准 |\n|---|---|---|\n| AC-01 | ... | ... |\n\n关键规则：\n- 必须独立完整，execute 子代理只读这一个文件就能干活\n- 不要依赖其他 task-N.md 的内容\n- 接口定义写到\"搬砖工照着做\"的程度\n- 边界处理至少 5 条\n- 验收标准用表格，禁止笼统表述\n- 写完后用 Write tool 保存到文件\n```\n\n```\n任务编号：task-14\n任务名称：集成测试 — init + brainstorm → plan → execute → verify → archive 全流程\n文件路径：/Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-14.md\n\n操作：\n1. 读取 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/design.md 和 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/plan.md 了解上下文\n2. 读取相关源文件了解现有代码\n3. 按以下格式编写任务蓝图并保存到 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-14.md：\n\n---\nid: task-14\ntitle: 集成测试 — init + brainstorm → plan → execute → verify → archive 全流程\npriority: P0/P1/P2\nestimated_hours: N\ndepends_on: [task-XX]\nblocks: [task-XX]\nallowed_paths:\n  - ...\n---\n\n# task-14: 集成测试 — init + brainstorm → plan → execute → verify → archive 全流程\n\n## 修改文件（必填）\n- 精确到文件路径\n\n## 实现要求\n1. 具体做什么\n\n## 接口定义（代码类任务必填）\n方法签名、数据结构、控制流伪代码\n\n## 边界处理（必填）\n- null/空值行为\n- 兼容旧行为（brownfield：未配置新功能时行为不变）\n- 异常不静默吞掉（明确返回值或抛出）\n- 不修改传入参数\n- 歧义/冲突场景的处理策略\n\n## 非目标（本任务不做的事）\n- 明确边界，防止 scope creep\n\n## 参考\n- 可参考的模式\n\n## TDD 步骤\n1. 写测试 → 2. 确认失败 → 3. 写代码 → 4. 确认通过 → 5. 回归\n\n## 验收标准\n| # | 验证步骤 | 通过标准 |\n|---|---|---|\n| AC-01 | ... | ... |\n\n关键规则：\n- 必须独立完整，execute 子代理只读这一个文件就能干活\n- 不要依赖其他 task-N.md 的内容\n- 接口定义写到\"搬砖工照着做\"的程度\n- 边界处理至少 5 条\n- 验收标准用表格，禁止笼统表述\n- 写完后用 Write tool 保存到文件\n```\n\n```\n任务编号：task-15\n任务名称：更新 docs/sillyspec/file-lifecycle.md 文档\n文件路径：/Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-15.md\n\n操作：\n1. 读取 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/design.md 和 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/plan.md 了解上下文\n2. 读取相关源文件了解现有代码\n3. 按以下格式编写任务蓝图并保存到 /Users/qinyi/Desktop/sillyspec/.sillyspec/changes/2026-05-31-sqlite-migration/tasks/task-15.md：\n\n---\nid: task-15\ntitle: 更新 docs/sillyspec/file-lifecycle.md 文档\npriority: P0/P1/P2\nestimated_hours: N\ndepends_on: [task-XX]\nblocks: [task-XX]\nallowed_paths:\n  - ...\n---\n\n# task-15: 更新 docs/sillyspec/file-lifecycle.md 文档\n\n## 修改文件（必填）\n- 精确到文件路径\n\n## 实现要求\n1. 具体做什么\n\n## 接口定义（代码类任务必填）\n方法签名、数据结构、控制流伪代码\n\n## 边界处理（必填）\n- null/空值行为\n- 兼容旧行为（brownfield：未配置新功能时行为不变）\n- 异常不静默吞掉（明确返回值或抛出）\n- 不修改传入参数\n- 歧义/冲突场景的处理策略\n\n## 非目标（本任务不做的事）\n- 明确边界，防止 scope creep\n\n## 参考\n- 可参考的模式\n\n## TDD 步骤\n1. 写测试 → 2. 确认失败 → 3. 写代码 → 4. 确认通过 → 5. 回归\n\n## 验收标准\n| # | 验证步骤 | 通过标准 |\n|---|---|---|\n| AC-01 | ... | ... |\n\n关键规则：\n- 必须独立完整，execute 子代理只读这一个文件就能干活\n- 不要依赖其他 task-N.md 的内容\n- 接口定义写到\"搬砖工照着做\"的程度\n- 边界处理至少 5 条\n- 验收标准用表格，禁止笼统表述\n- 写完后用 Write tool 保存到文件\n```\n\n## 验收\n- 每个 task-N.md 文件存在且非空\n- 包含 YAML frontmatter（id、title、priority、depends_on、blocks、allowed_paths）\n- 包含所有必要章节：修改文件、实现要求、接口定义、边界处理（≥5条）、非目标、TDD 步骤、验收标准（表格格式）\n- 边界处理覆盖：null/空值、兼容性、异常处理、参数不可变、歧义场景",
+          "outputHint": "蓝图生成结果",
+          "optional": false,
+          "completedAt": "2026/5/31 10:57:37",
+          "output": "15 个任务蓝图全部生成并验证通过。task-02 格式已修正。"
+        },
+        {
+          "name": "审查一致性",
+          "status": "completed",
+          "completedAt": "2026/5/31 10:57:44",
+          "output": "一致性审查通过：无文件路径冲突，依赖关系与 Wave 分组一致，验收标准与全局标准无矛盾。"
+        },
+        {
+          "name": "保存并更新进度",
+          "status": "completed",
+          "completedAt": "2026/5/31 10:57:47",
+          "output": "plan 阶段完成。plan.md + 15 个 task 蓝图全部生成并 git add。"
+        }
+      ]
+    },
+    "execute": {
+      "status": "in-progress",
+      "startedAt": "2026/5/31 10:58:33",
+      "completedAt": null,
+      "steps": [
+        {
+          "name": "状态检查",
+          "status": "completed",
+          "completedAt": "2026/5/31 10:58:36",
+          "output": "状态确认：execute 阶段，15 个 task，W1 开始"
+        },
+        {
+          "name": "加载上下文",
+          "status": "completed",
+          "completedAt": "2026/5/31 10:58:38",
+          "output": "上下文加载完成：plan.md + design.md + tasks.md + stages模块.md + _module-map.yaml。无 CONVENTIONS.md/ARCHITECTURE.md/local.yaml（sillyspec 自身项目，未生成 scan 文档）。"
+        },
+        {
+          "name": "创建 worktree",
+          "status": "completed",
+          "completedAt": "2026/5/31 10:58:46",
+          "output": "worktree 已创建：分支 sillyspec/2026-05-31-sqlite-migration，路径 /Users/qinyi/Desktop/sillyspec/.sillyspec/.runtime/worktrees/2026-05-31-sqlite-migration"
+        },
+        {
+          "name": "确认执行范围",
+          "status": "completed",
+          "completedAt": "2026/5/31 11:02:12",
+          "output": "执行范围确认：全自动模式（用户选择3）。5 个 Wave，15 个 task。知识库无匹配条目。"
+        },
+        {
+          "name": "Wave 1 执行",
+          "status": "completed",
+          "completedAt": "2026/5/31 11:05:35",
+          "output": "W1 完成：task-01 sql.js 安装验证通过，task-02 src/db.js 新增完成（168行，27项测试通过，发现并修复了 sql.js db.export() 重置 PRAGMA 的问题）。"
+        },
+        {
+          "name": "Wave 2 执行",
+          "status": "completed",
+          "completedAt": "2026/5/31 11:12:02",
+          "output": "W2 完成：task-03~07 全部改造 progress.js 核心 CRUD 为 SQL。read() 返回值兼容性验证 90 断言全通过，语法检查通过。删除临时测试文件。"
+        },
+        {
+          "name": "Wave 3 执行",
+          "status": "completed",
+          "completedAt": "2026/5/31 11:13:13",
+          "output": "W3 完成：task-08 删除3个废弃方法及调用点，task-09 init.js 改为 async SQLite 初始化，task-10 index.js 新增 platform 命令解析。三个文件语法检查通过。"
+        },
+        {
+          "name": "Wave 4 执行",
+          "status": "completed",
+          "completedAt": "2026/5/31 11:15:53",
+          "output": "W4 完成：task-11 sync.js 新增（450行，SyncManager 类 + 6个导出方法），task-12 run.js 改造（11处 pm._write 改 await + triggerSync + execute 前审批检查）。语法检查通过。"
+        },
+        {
+          "name": "Wave 5 执行",
+          "status": "pending"
+        },
+        {
+          "name": "对照设计检查",
+          "status": "pending"
+        },
+        {
+          "name": "运行测试",
+          "status": "pending"
+        },
+        {
+          "name": "代码审查",
+          "status": "pending"
+        },
+        {
+          "name": "知识库审阅",
+          "status": "pending"
+        },
+        {
+          "name": "完成确认",
+          "status": "pending"
+        }
+      ]
+    },
+    "verify": {
+      "status": "pending",
+      "steps": [],
+      "startedAt": null,
+      "completedAt": null
+    },
+    "archive": {
+      "status": "pending",
+      "steps": [],
+      "startedAt": null,
+      "completedAt": null
+    },
+    "quick": {
+      "status": "pending",
+      "steps": [],
+      "startedAt": null,
+      "completedAt": null
+    },
+    "explore": {
+      "status": "pending",
+      "steps": [],
+      "startedAt": null,
+      "completedAt": null
+    }
+  },
+  "lastActive": "2026/5/31 11:15:53"
+}

@@ -35,7 +35,7 @@ SillySpec CLI — 规范驱动开发工具包
     auto                       连续推进 brainstorm→plan→execute→verify
 
   可选阶段:
-    scan, brainstorm, plan, execute, verify, archive
+    scan, brainstorm, propose, plan, execute, verify, archive
     quick, explore, status, doctor
 
   sillyspec progress <cmd>     进度记录（轻量，不强制顺序）
