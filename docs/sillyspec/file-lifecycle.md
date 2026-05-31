@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-05-31 11:00:00
+updated_at: 2026-05-31 21:35:00
 ---
 
 # SillySpec 文件生命周期描述
@@ -33,7 +33,7 @@ updated_at: 2026-05-31 11:00:00
 │   │   ├── tasks/              ← 单任务实现文档目录（plan 阶段创建）
 │   │   │   └── task-NN.md
 │   │   ├── module-impact.md    ← 模块影响分析矩阵
-│   │   ├── verification.md     ← 验证报告（⚠️ prompt 写 verification.md，validateFileLocations 期望 verify-result.md）
+│   │   ├── verify-result.md    ← 验证报告（归档产物）
 │   │   ├── prototype-*.html   ← HTML 原型（可选，brainstorm 判断）
 │   │   └── MASTER.md           ← 大需求拆分主控（可选，brainstorm 判断拆分时）
 │   └── archive/               ← 已归档变更
@@ -472,9 +472,7 @@ created_at: <YYYY-MM-DD HH:mm:ss>
 
 ---
 
-### `verify-result.md` / `verification.md` — 验证报告
-
-> ⚠️ **代码存在命名不一致**：verify 阶段 prompt 中输出文件名为 `verification.md`，但 `validateFileLocations()` 期望的文件名是 `verify-result.md`。实际运行时 AI 按照 prompt 写入 `verification.md`，但位置校验会报 `verify-result.md` 缺失。这是已知的不一致。
+### `verify-result.md` — 验证报告
 
 **创建时机：** verify 阶段"输出验证报告"步骤
 
@@ -758,12 +756,12 @@ test_strategy: module
 
 ### 变更归档流程
 
-**触发：** archive 阶段"确认归档"步骤 + `--confirm` 标志
+**触发：** archive 阶段"确认归档"步骤（AI 直接执行 mkdir + mv 移动变更目录）
 
 **操作：**
-1. `mkdirSync` 创建 `archive/` 目录
-2. `renameSync` 将 `changes/<name>/` 移动到 `changes/archive/YYYY-MM-DD-<name>/`
-3. 校验：源目录不存在 + 目标目录存在
+1. AI 创建 `archive/` 目录：`mkdir -p .sillyspec/changes/archive`
+2. AI 移动变更目录：`mv .sillyspec/changes/<name> .sillyspec/changes/archive/<name>`
+3. AI 确认移动成功：`ls .sillyspec/changes/archive/<name>/`
 4. `unregisterChange()` 将 `changes.status` 更新为 `archived`（SQL UPDATE）
 
 ### Worktree 清理流程
@@ -1036,7 +1034,7 @@ graph LR
 | `AGENTS.md` 等 | 选了 codex/gemini/opencode 工具 | init | AI 工具读取 |
 | `projects/*.yaml` | init 自动创建 | init | 子项目上下文加载 |
 | `modules/_module-map.yaml` | scan 可选步骤 | scan | archive/plan/execute |
-| `verification.md` | verify 阶段输出 | verify | 验证报告存档 |
+| `verify-result.md` | verify 阶段输出 | verify | 验证报告存档 |
 
 
 ```
@@ -1093,7 +1091,7 @@ execute 阶段
 
 verify 阶段
     │
-    └─→ changes/<name>/verification.md （⚠️ prompt 输出 verification.md，validateFileLocations 期望 verify-result.md）
+    └─→ changes/<name>/verify-result.md
 
 quick 阶段（辅助阶段，不走完整流程）
     │
