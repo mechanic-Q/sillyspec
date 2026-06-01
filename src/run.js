@@ -213,6 +213,10 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
   promptText = promptText.replace(/<now-datetime>/g, nowDatetime)
   promptText = promptText.replace(/<now-timestamp>/g, nowTimestamp)
   promptText = promptText.replace(/<now-date>/g, nowDate)
+  // 替换 <change-name> 占位符
+  if (changeName && promptText.includes('<change-name>')) {
+    promptText = promptText.replace(/<change-name>/g, changeName)
+  }
   console.log(promptText)
   console.log(`\n### ⚠️ 铁律`)
   console.log('- **文档是核心资产，代码是文档的产物。** 没有文档就没有代码——文档是 AI 的记忆，是团队协作的基础，是后续维护的唯一依据。任何代码产出必须先有对应的设计/规范文档支撑。')

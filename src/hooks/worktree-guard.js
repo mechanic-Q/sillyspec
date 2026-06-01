@@ -14,7 +14,7 @@ import path from 'path'
 
 // ── 常量 ──
 
-const ALLOWED_STAGES = ['execute', 'quick']
+const WORKTREE_STAGES = ['execute'] // 这些阶段必须在 worktree 里
 
 const WORKTREE_SEGMENT = '.sillyspec/.runtime/worktrees/'
 
@@ -410,14 +410,17 @@ export function shouldBlockWrite(filePath, cwd) {
   const effectiveCwd = cwd || process.cwd()
   const stage = readCurrentStage(effectiveCwd) || '(none)'
 
-  if (!ALLOWED_STAGES.includes(stage)) {
+  if (!['execute', 'quick'].includes(stage)) {
     return {
       blocked: true,
       reason: buildStageHint(stage)
     }
   }
 
-  // 3. 位置门禁
+  // quick 阶段直接放行（不要求 worktree）
+  if (stage === 'quick') return { blocked: false }
+
+  // execute 阶段：位置门禁
   if (isInsideWorktree(absPath)) return { blocked: false }
 
   // noWorktree 模式：无隔离环境，禁止源码写入（降级到更严格）
@@ -464,9 +467,8 @@ export function shouldBlockBash(command, cwd) {
 
   // 阶段门禁（使用 fallback 读取）
   const stage = readCurrentStage(effectiveCwd) || '(none)'
-  const stageOk = ALLOWED_STAGES.includes(stage)
 
-  if (!stageOk) {
+  if (!['execute', 'quick'].includes(stage)) {
     // 非 execute/quick 阶段，只允许只读白名单
     const localConfig = loadLocalConfig(effectiveCwd)
     const extraReadonly = localConfig.worktreeHook?.readonlyCommands || localConfig['worktree-hook']?.readonlyCommands || []
@@ -477,7 +479,16 @@ export function shouldBlockBash(command, cwd) {
     }
   }
 
-  // execute/quick 阶段 + 主工作区
+  // quick 阶段直接放行（不要求 worktree）
+  if (stage === 'quick') {
+    // 危险黑名单仍然拦截
+    if (matchDangerBlacklist(command)) {
+      return { blocked: true, reason: `dangerous command blocked: ${command.trim()}` }
+    }
+    return { blocked: false }
+  }
+
+  // execute 阶段 + 主工作区
   const localConfig = loadLocalConfig(effectiveCwd)
   const extraReadonly = localConfig.worktreeHook?.readonlyCommands || localConfig['worktree-hook']?.readonlyCommands || []
 

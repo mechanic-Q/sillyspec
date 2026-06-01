@@ -106,7 +106,13 @@ export class WorktreeManager {
 
     // 1. 检查 worktree 是否已存在
     if (existsSync(worktreePath)) {
-      throw new Error(`worktree already exists: ${name}. Run cleanup first.`);
+      // 目录在但 meta.json 不存在（幽灵状态），自动清理
+      if (!this.getMeta(name)) {
+        console.log(`⚠️  检测到幽灵 worktree 目录（无 meta.json），自动清理...`);
+        try { rmSync(worktreePath, { recursive: true, force: true }); } catch {}
+      } else {
+        throw new Error(`worktree already exists: ${name}. Run cleanup first.`);
+      }
     }
 
     // 2. 检查分支是否已存在
@@ -223,26 +229,27 @@ export class WorktreeManager {
   cleanup(changeName) {
     const name = validateChangeName(changeName);
     const meta = this.getMeta(name);
+    const worktreePath = this.getWorktreePath(name);
 
-    if (!meta) {
-      throw new Error(`worktree not found: ${name}。meta.json 不存在，可能已被清理或从未创建。`);
+    if (!meta && !existsSync(worktreePath)) {
+      throw new Error(`worktree not found: ${name}。meta.json 不存在，目录也不存在，可能已被清理或从未创建。`);
     }
 
-    const worktreePath = meta.worktreePath || this.getWorktreePath(name);
-    const branch = meta.branch || BRANCH_PREFIX + name;
-
-    // 2. 移除 git worktree
+    // 1. 尝试 git worktree remove
     try {
       git(this.cwd, `worktree remove ${worktreePath} --force`);
     } catch {
       // git worktree remove 失败，尝试直接删除目录
-      try {
-        if (existsSync(worktreePath)) {
-          rmSync(worktreePath, { recursive: true, force: true });
-        }
-      } catch (e) {
-        throw new Error(`清理 worktree 目录失败: ${e.message}`);
+    }
+    const branch = (meta && meta.branch) || BRANCH_PREFIX + name;
+
+    // 2. 确保目录已删除
+    try {
+      if (existsSync(worktreePath)) {
+        rmSync(worktreePath, { recursive: true, force: true });
       }
+    } catch (e) {
+      throw new Error(`清理 worktree 目录失败: ${e.message}`);
     }
 
     // 3. 删除分支（忽略分支不存在的错误）
