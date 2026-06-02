@@ -239,8 +239,37 @@ timeout 5 which docker 2>/dev/null && echo "✅ Docker 可用" || echo "ℹ️ D
       optional: false
     },
     {
+      name: '模块文档健康检查',
+      prompt: `检查模块索引和卡片文档的健康状态。
+
+### 操作
+1. 运行 \`sillyspec modules status\` 查看模块索引概览
+2. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`
+3. 对每个模块，检查：
+   - module_id 是否有对应的卡片文件（modules/<module-id>.md）
+   - 卡片文件是否有有效的 frontmatter（schema_version, doc_type, module_id）
+   - 人工备注标记是否配对（MANUAL_NOTES_START 和 MANUAL_NOTES_END 必须成对出现）
+   - needs_review 为 true 的模块列表
+4. 汇总结果
+
+### 输出格式
+\`\`\`
+📋 模块文档健康检查
+✅ _module-map.yaml — 存在，N 个模块
+⚠️  auth-service — needs_review=true，原因：...
+❌ payment-service — 卡片文件缺失
+✅ 所有模块人工备注标记配对正常
+\`\`\`
+
+### 注意
+- 如果 _module-map.yaml 不存在，输出"模块索引未生成，建议运行 scan"
+`,
+      outputHint: '模块文档健康状态',
+      optional: false
+    },
+    {
       name: '汇总报告',
-      prompt: `汇总前三步的所有检查结果，生成最终的自检报告。
+      prompt: `汇总前四步的所有检查结果，生成最终的自检报告。
 
 ### 输出格式
 \`\`\`

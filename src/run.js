@@ -224,6 +224,7 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
   console.log('- 不要回头修改已完成的步骤')
   console.log('- 不要编造不存在的 CLI 子命令')
   console.log('- 完成后立即执行 --done 命令，不得跳过')
+  console.log('- 不要用 mv/rename 重命名变更目录，必须用 `sillyspec change-rename <旧名> <新名>`')
   console.log('- 文档类型文件（.md/.yaml/.json 等）头部必须包含 author（git 用户名）和 created_at（精确到秒）')
   console.log('- 执行构建/测试前必须先读 local.yaml，优先使用其中配置的命令、路径和环境变量；未配置时才使用默认值')
   // 路径安全规则：防止 AI 拼错变更目录
@@ -310,6 +311,7 @@ export async function runCommand(args, cwd) {
         const autoName = `${date}-new-change`
         console.log(`🔄 自动创建变更：${autoName}`)
         console.log(`  提示：可以用 --change <名称> 指定自定义变更名`)
+        console.log(`  或事后重命名：sillyspec change-rename ${autoName} <新名称>`)
         progress = await pm.initChange(cwd, autoName)
         changeName = autoName
       } else {

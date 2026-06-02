@@ -12,13 +12,15 @@ export const definition = {
 2. 确认 currentStage 为 "brainstorm"
 3. 如果有进行中的 brainstorm，提示选择继续或重新开始
 4. 如果未初始化，提示先运行 sillyspec init
+5. **检查变更名称是否有意义**：如果当前变更名是自动生成的（如 \`2026-06-02-new-change\`），先询问用户确认实际变更名，然后运行 \`sillyspec change-rename <旧名> <新名>\` 重命名
 
 ### 输出
 当前状态摘要（1-2 句话）
 
 ### 注意
 - 以 CLI 返回为准，不要自行推断阶段
-- 如果阶段不对，输出正确提示并停止`,
+- 如果阶段不对，输出正确提示并停止
+- **不要用 mv 命令重命名变更目录**，必须使用 \`sillyspec change-rename\`，否则 DB 和目录会脱节`,
       outputHint: '状态摘要',
       optional: false
     },
@@ -32,14 +34,25 @@ export const definition = {
 3. 加载本地配置：\`cat .sillyspec/local.yaml 2>/dev/null\`
 4. 询问本次需求属于哪个子项目
 5. 棕地项目：读取 .sillyspec/docs/<project>/scan/ 下的 STRUCTURE.md、CONVENTIONS.md、ARCHITECTURE.md
-6. 查看进行中的变更：\`ls .sillyspec/changes/ | grep -v archive\`
+6. **加载模块索引**：读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`（如存在）
+   - 这一步是高频操作，_module-map.yaml 回答“哪个文件属于哪个模块、模块之间怎么依赖”
+   - 用 tags/aliases 字段做需求关键词→模块的粗匹配
+   - 用 entrypoints 字段快速了解模块对外能力
+7. 查看进行中的变更：\`ls .sillyspec/changes/ | grep -v archive\`
+
+### 模块匹配方法
+读取 _module-map.yaml 后，根据用户描述的需求关键词，匹配相关模块：
+- 需求中提到"登录""认证""token" → 匹配 tags/aliases 中含这些词的模块
+- 需求中提到特定文件路径 → 匹配 paths 字段
+- 匹配结果用于后续 design.md 的文件变更清单
 
 ### 输出
-项目现状理解摘要（3-5 句话，关键约定和架构决策）
+项目现状理解摘要（3-5 句话，关键约定和架构决策）+ 可能涉及的模块列表
 
 ### 注意
 - 始终询问本次需求属于哪个子项目
-- 棕地项目必须读取数据模型章节`,
+- 棕地项目必须读取数据模型章节
+- 模块匹配只是粗筛，后续步骤会细化`,
       outputHint: '上下文摘要',
       optional: false
     },

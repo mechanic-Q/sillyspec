@@ -38,9 +38,14 @@ export const fixedPrefix = [
 6. 根据 design.md 的文件变更清单匹配 _module-map.yaml 中的模块
 7. 读取匹配到的 \`.sillyspec/docs/<project>/modules/<module>.md\`
 8. 将模块文档作为制定计划的上下文，确保计划符合模块当前设计
+9. **利用模块依赖关系辅助分析**：
+   - 用 depends_on 判断哪些模块会被间接影响
+   - 用 used_by 判断变更会不会影响下游模块
+   - 将依赖关系纳入 Wave 分组决策（依赖同一模块的任务尽量同 Wave）
+   - 如果变更涉及多个有依赖关系的模块，在 plan.md 的任务总表中标注模块依赖
 
 ### 输出
-已加载的文件清单（含模块文档）`,
+已加载的文件清单（含模块文档 + 模块依赖关系摘要）`,
     outputHint: '文件清单',
     optional: false
   },

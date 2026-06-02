@@ -63,9 +63,10 @@ export const definition = {
 6. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`（不存在则跳过以下步骤）
 7. 根据 design.md 的文件变更清单匹配 _module-map.yaml 中的模块
 8. 读取匹配到的 \`.sillyspec/docs/<project>/modules/<module>.md\`
+9. **检查模块索引可信度**：如果相关模块的 needs_review 为 true，提示"该模块索引可能不可信，需要回看模块卡片或源码"
 
 ### 输出
-文件加载确认清单（含模块文档）`,
+文件加载确认清单（含模块文档 + 索引可信度）`,
       outputHint: '文件确认清单',
       optional: false
     },

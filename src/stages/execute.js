@@ -41,9 +41,13 @@ const fixedPrefix = [
 7. 根据 plan.md 中的任务文件路径匹配 _module-map.yaml 中的模块
 8. 读取匹配到的 \`.sillyspec/docs/<project>/modules/<module>.md\`
 9. 实现代码时遵循模块文档中描述的接口约定、数据流和依赖关系
+10. **利用模块索引快速定位源码**：
+    - 用 entrypoints 字段直接找到模块对外 API 的源码位置
+    - 用 main_symbols 字段找到核心类/函数的定义位置
+    - 子代理优先读模块卡片理解语义，再读 entrypoints/main_symbols 对应的源码
 
 ### 输出
-已加载的上下文摘要（含模块文档）`,
+已加载的上下文摘要（含模块文档 + 源码锚点）`,
     outputHint: '上下文摘要',
     optional: false
   },

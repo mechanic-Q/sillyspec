@@ -191,43 +191,114 @@ local.yaml 生成结果（已存在/已生成）`,
     },
     {
       name: '生成模块映射',
-      prompt: `生成模块映射配置文件，建立"文件路径 → 模块"的稳定映射。
+      prompt: `生成模块索引文件 \`_module-map.yaml\`，它是 agent 高频读取的机器索引。
+
+### ⚠️ 重要：这个文件是唯一的结构化索引源
+所有结构化事实（paths/tags/entrypoints/depends_on/used_by）只维护在这个文件里。
+模块卡片（modules/*.md）只负责人类语义说明，不重复索引信息。
 
 ### 操作
-1. 检查 \.sillyspec/docs/<project>/modules/_module-map.yaml\` 是否已存在，已存在则跳过
-2. 分析项目 src/ 目录结构（或主代码目录），识别模块划分：
-   - 用 \`find . -maxdepth 2 -type d -not -path "*/node_modules/*" -not -path "*/.git/*"\` 查看目录结构
-   - 每个独立目录（有明确职责的）识别为一个模块
-   - 路径用 glob 模式（如 \`src/auth/**\`）
-3. 生成 \.sillyspec/docs/<project>/modules/_module-map.yaml\`
-4. 如果 modules/ 目录不存在，先创建
-5. 原子写入（先写 tmp 文件再 rename）
+1. 检查 \`.sillyspec/docs/<project>/modules/_module-map.yaml\` 是否已存在，已存在则跳过
+2. 分析项目源码目录结构，识别模块划分：
+   - 用 \`find . -maxdepth 3 -type d -not -path "*/node_modules/*" -not -path "*/.git/*"\` 查看目录结构
+   - 每个有明确职责的独立目录识别为一个模块
+   - 路径用 glob 模式
+3. 用 grep/rg 分析每个模块：
+   - \`main_symbols\`：模块导出的主要函数/类/常量（grep export / module.exports / def / class）
+   - \`entrypoints\`：对外 API 端点或命令入口（grep route / router / @Controller / @GetMapping 等）
+   - \`tags\`：模块相关关键词标签
+   - \`aliases\`：模块的别名（其他开发者可能怎么称呼这个模块）
+4. 分析跨模块依赖关系：
+   - 用 grep import/require 分析模块间的引用链
+   - 填充 depends_on（本模块依赖谁）和 used_by（谁依赖本模块）
+5. 生成 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`
+6. 如果 modules/ 目录不存在，先创建
+7. 原子写入（先写 tmp 文件再 rename）
 
 ### YAML 格式
 \`\`\`yaml
-# 模块映射（自动生成，可手动修改）
-# 用于 archive 阶段识别变更影响的模块
+schema_version: 1
+project: <project-name>
+source_commit: <git-head-short>
+generated_at: <now-datetime>
+generator: sillyspec-scan
+
 modules:
-  <module-name>:
+  <module-id>:
+    status: active
+    doc: modules/<module-id>.md
     paths:
       - <glob-pattern>
-    description: <一句话描述>
+    tags:
+      - <tag1>
+      - <tag2>
+    aliases:
+      - <alias1>
+    entrypoints:
+      - <exported-symbol-or-api-endpoint>
+    main_symbols:
+      - <exported-class-or-function>
+    depends_on:
+      - <other-module-id>
+    used_by:
+      - <other-module-id>
+    needs_review: false
+    concerns: []
+    review_reasons: []
 \`\`\`
 
 ### 示例
 \`\`\`yaml
-modules:
-  core:
-    paths:
-      - src/core/**
-      - src/utils/**
-    description: 核心工具和公共逻辑
+schema_version: 1
+project: multi-agent-platform
+source_commit: abc1234
+generated_at: 2026-06-02 22:00:00
+generator: sillyspec-scan
 
-  stages:
+modules:
+  auth-service:
+    status: active
+    doc: modules/auth-service.md
     paths:
-      - src/stages/**
-    description: 阶段定义（brainstorm/plan/execute/verify/archive等）
+      - src/modules/auth/**
+      - src/middleware/auth.js
+    tags:
+      - auth
+      - jwt
+      - rbac
+      - middleware
+    aliases:
+      - login
+      - token
+      - authentication
+    entrypoints:
+      - authenticate
+      - authorize
+      - signToken
+      - refreshToken
+    main_symbols:
+      - AuthService
+      - AuthController
+      - hashPassword
+      - verifyPassword
+    depends_on:
+      - users
+      - redis
+    used_by:
+      - api-routes
+      - admin-routes
+    needs_review: false
+    concerns: []
+    review_reasons: []
 \`\`\`
+
+### 关键规则
+- module-id 用 kebab-case（如 auth-service）
+- depends_on / used_by 引用其他模块的 module-id
+- tags 和 aliases 用于 brainstorm 阶段的需求→模块匹配，尽量覆盖开发者可能用的词
+- entrypoints 和 main_symbols 用于 execute 阶段快速定位源码
+- 不要编造无法从源码 grep 到的符号
+- 如果无法确定依赖关系，depends_on/used_by 留空列表，不要猜
 
 ### 输出
 _module-map.yaml 生成结果（已存在/已生成/模块列表）`,
@@ -235,8 +306,12 @@ _module-map.yaml 生成结果（已存在/已生成/模块列表）`,
       optional: true
     },
     {
-      name: '生成模块核心文档',
-      prompt: `根据 _module-map.yaml 中的模块划分，为每个模块生成核心文档（用于后续归档和开发上下文）。
+      name: '生成模块卡片文档',
+      prompt: `根据 _module-map.yaml 中的模块划分，为每个模块生成精简卡片文档。
+
+### ⚠️ 重要：模块卡片只负责人类语义说明
+结构化索引（paths/tags/entrypoints/depends_on/used_by）已经在 _module-map.yaml 里维护。
+卡片里不要重复这些信息，只写 _module-map.yaml 无法表达的语义内容。
 
 ### 操作
 1. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`，获取模块列表和路径
@@ -255,32 +330,48 @@ _module-map.yaml 生成结果（已存在/已生成/模块列表）`,
 - 环境探测结果摘要（构建工具、语言框架）
 - scan 文档关键信息摘要（ARCHITECTURE.md 的技术栈、CONVENTIONS.md 的代码风格要点，如已生成）
 \`\`\`
-模块名：<module-name>
+模块名：<module-id>
 模块路径：<glob patterns>
-目标文件：.sillyspec/docs/<project>/modules/<module>.md
+目标文件：.sillyspec/docs/<project>/modules/<module-id>.md
 
 操作：
 1. 用 grep/rg 搜索模块路径范围内的源码（禁止读源码全文）
-2. 提取：模块职责、对外接口（导出函数/API）、关键依赖、设计要点
+2. 提取：模块职责、对外接口、关键逻辑、注意事项
 3. 按以下模板写入目标文件：
 
-# <module-name>
-> 最后更新：<now-date>
-> 最近变更：scan（初始生成）
-> 模块路径：<glob patterns>
+---
+schema_version: 1
+doc_type: module-card
+module_id: <module-id>
+---
 
-## 职责
-## 当前设计
-## 对外接口（表格）
-## 关键数据流
-## 设计决策（表格）
-## 依赖关系
+# <module-id>
+
+## 定位
+（负责什么，不负责什么 — 明确边界）
+
+## 契约摘要
+（核心能力列表，具体导出符号以 _module-map.yaml 的 entrypoints/main_symbols 为准）
+
+## 关键逻辑
+（最核心的流程摘要，用 text 伪代码，不超过 3-5 行）
+
 ## 注意事项
-## 变更索引（表格，初始为空）
+（维护提醒、已知限制、修改时需同步检查的模块）
+
+## 人工备注
+
+<!-- MANUAL_NOTES_START -->
+
+<!-- MANUAL_NOTES_END -->
 
 规则：
 - 不要编造接口或依赖，只写 grep/rg 能搜到的
-- 模板与 archive 阶段格式一致
+- 目标长度：500-1000 字 / 80-150 行
+- 如果模块特别复杂（状态机、多角色交互、复杂领域规则），可以在 modules/details/ 下生成扩展文档（如 details/<module-id>-flow.md），agent 默认不读
+- 不要重复 _module-map.yaml 中的索引信息
+- 不要写设计决策表、完整依赖表、变更索引长表
+- 人工备注区域保持空标记，留给用户填写
 \`\`\`
 
 等待所有子代理完成，验证文件是否生成且非空。
@@ -291,6 +382,72 @@ _module-map.yaml 生成结果（已存在/已生成/模块列表）`,
       optional: true
     },
     {
+      name: '生成业务流程和术语表（可选）',
+      prompt: `根据模块依赖关系和源码，生成跨模块业务流程文档和术语表。
+
+⚠️ 这一步是可选的。如果项目模块简单、流程不明显，可以跳过。
+
+### flows/ 目录
+目标目录：\`.sillyspec/docs/<project>/flows/\`
+
+根据 _module-map.yaml 中的模块依赖关系，识别跨模块业务流程：
+1. 读取 \`_module-map.yaml\`，分析 used_by 链条
+2. 用 grep/rg 搜索路由定义、API 端点、事件处理
+3. 识别跨模块的完整业务流程（如登录→下单→支付）
+4. 每个流程生成一个文件：\`flows/<flow-name>.md\`
+
+文件格式：
+\`\`\`markdown
+# <flow-name>
+
+## 目标
+（一句话描述这个流程的业务目的）
+
+## 参与模块
+- module-a：做什么
+- module-b：做什么
+
+## 流程摘要
+\`\`\`text
+step1 → step2 → step3
+\`\`\`
+
+## 失败回滚
+| 失败点 | 处理 |
+|---|---|
+\`\`\`
+
+### glossary.md
+目标文件：\`.sillyspec/docs/<project>/glossary.md\`
+
+提取项目专有术语：
+1. 用 grep 搜索 TODO/FIXME 注释中的术语定义
+2. 从数据库表注释提取
+3. 从 README 和文档中提取定义段落
+
+文件格式：
+\`\`\`markdown
+# Glossary
+
+## Session
+在本项目中，session 指...（项目内特殊含义）
+
+## Order
+订单主实体，代表...（业务定义）
+\`\`\`
+
+### 操作
+1. 分析模块依赖关系，识别可能的业务流程
+2. 如果发现 2+ 个跨模块流程，生成 flows/ 文档
+3. 提取术语生成 glossary.md
+4. 如果没有明显的流程或术语，跳过此步
+
+### 输出
+生成的文件路径列表（或"已跳过"）`,
+      outputHint: '流程和术语表生成状态',
+      optional: true
+    },
+    {
       name: '自检和提交',
       prompt: `验证扫描完整性，清理并提交。
 
@@ -298,8 +455,9 @@ _module-map.yaml 生成结果（已存在/已生成/模块列表）`,
 1. 检查 7 份 scan 文档是否全部生成
 2. 检查模块文档状态（如有）
 3. 自检门控：ARCHITECTURE（技术栈+Schema摘要）、CONVENTIONS（隐形规则+代码风格）、STRUCTURE（目录结构）、INTEGRATIONS（外部依赖）、TESTING（测试现状）、CONCERNS（技术债务）、PROJECT（项目概览）
-4. 清理：\`rm -f .sillyspec/docs/<project>/scan/_env-detect.md\`
-5. \`git add .sillyspec/\` — 暂存扫描结果（不要 commit，由用户通过统一提交工具处理）
+4. 检查 flows/ 和 glossary.md 是否已生成（如有）
+5. 清理：\`rm -f .sillyspec/docs/<project>/scan/_env-detect.md\`
+6. \`git add .sillyspec/\` — 暂存扫描结果（不要 commit，由用户通过统一提交工具处理）
 
 ### 输出
 扫描完整性报告

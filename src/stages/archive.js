@@ -35,10 +35,11 @@ export const definition = {
 5. 将 git diff 文件按 \`_module-map.yaml\` 的 paths glob 匹配到模块
 6. 生成模块影响矩阵：
 
-| 模块 | 影响类型 | 相关文件 | 更新内容摘要 |
-|------|----------|----------|-------------|
+| 模块 | 影响类型 | 相关文件 | 更新内容摘要 | needs_review |
+|------|----------|----------|-------------|-------------|
 
    影响类型：逻辑变更 / 数据结构变更 / 接口变更 / 调用关系变更 / 配置变更 / 新增
+   needs_review：如果影响无法完全确定，标记为 true
 
 7. 未匹配到任何模块的文件归入"未匹配文件"表格
 8. 生成 \`.sillyspec/changes/<change-name>/module-impact.md\`，格式：
@@ -52,8 +53,8 @@ created_at: <now-datetime>
 ## 变更：<change-name>
 
 ## 模块影响矩阵
-| 模块 | 影响类型 | 相关文件 | 更新内容摘要 |
-|------|----------|----------|-------------|
+| 模块 | 影响类型 | 相关文件 | 更新内容摘要 | needs_review |
+|------|----------|----------|-------------|-------------|
 
 ## 未匹配文件
 | 文件路径 | 说明 |
@@ -61,8 +62,8 @@ created_at: <now-datetime>
 
 ## 更新结果
 （sync-module-docs 步骤完成后回填）
-| 模块文档 | 操作 | 状态 |
-|----------|------|------|
+| 目标 | 操作 | 状态 |
+|------|------|------|
 \`\`\`
 
 ### 输出
@@ -72,71 +73,74 @@ module-impact.md 路径 + 影响模块数量 + 未匹配文件数量`,
     },
     {
       name: 'sync-module-docs',
-      prompt: `根据 module-impact.md 同步更新模块设计文档。
+      prompt: `根据 module-impact.md 同步更新模块索引和卡片文档。
 
-### 原则
-- 模块文档正文**永远描述当前状态**（快照模式），不是变更日志
-- 底部只保留轻量变更索引
-- 模块文档是下一次 AI 开发前必须读取的上下文
+### ⚠️ 核心原则：结构化事实改 _module-map.yaml，语义解释改模块卡片
+- \`_module-map.yaml\` 是唯一的结构化索引源（paths/tags/entrypoints/depends_on/used_by/status/needs_review）
+- 模块卡片只负责语义说明（定位/契约摘要/关键逻辑/注意事项/人工备注）
+- 一个信息只维护一次，不要两边重复
 
 ### 操作
 1. 读取 \`.sillyspec/changes/<change-name>/module-impact.md\`
 2. 如果没有受影响模块（只有 unmapped）→ 提示用户，跳过同步
-3. 对每个受影响模块：
-   a. 读取 \`.sillyspec/docs/<project>/modules/<module>.md\`（如不存在则新建）
-   b. 根据 module-impact.md 中的"更新内容摘要"，更新模块文档
-   c. **更新规则**：
-      - 新建：全量生成，使用下方模板
-      - 更新：只改相关章节（当前设计/对外接口/依赖关系等），保持其他章节不变
-      - 正文重写为当前状态，不追加历史
-      - 底部"变更索引"追加一行：\`| <日期> | <变更名> | <一句话摘要> |\`
-   d. 更新头部元数据：\`> 最后更新：<now-date>\`、\`> 最近变更：<change-name>\`
-4. 展示所有模块文档的更新内容（diff 摘要），请用户确认
-5. 用户确认后，写入 \`.sillyspec/docs/<project>/modules/*.md\`
-6. 用户拒绝时，不写入模块文档，但提示"module-impact.md 已保留，可稍后手动同步"
-7. 回填 module-impact.md 的"更新结果"表格
+3. 对每个受影响模块，按影响类型分别更新：
 
-### 模块文档模板
+#### 更新 _module-map.yaml 的规则
+- **路径变化** → 更新对应模块的 paths
+- **依赖变化** → 更新 depends_on / used_by（同时更新反向模块的 used_by / depends_on）
+- **导出符号变化** → 更新 entrypoints / main_symbols
+- **新增模块** → 添加完整条目
+- **模块废弃** → status: deprecated
+- **不确定的影响** → needs_review: true, review_reasons 追加原因
+- 如果 _module-map.yaml 的 generated_at 已过时，更新为当前时间
+
+#### 更新模块卡片（modules/<module-id>.md）的规则
+- **契约语义变化**（新增/删除对外能力） → 更新"契约摘要"
+- **关键逻辑变化** → 更新"关键逻辑"
+- **边界变化**（模块职责扩大/缩小） → 更新"定位"
+- **注意事项变化** → 更新"注意事项"
+- **内部实现变化**（不影响对外接口） → 通常不更新卡片
+- **人工备注** → 永远保护，不覆盖
+
+#### 人工备注保护
+1. 用正则提取 \`<!-- MANUAL_NOTES_START -->\` 到 \`<!-- MANUAL_NOTES_END -->\` 之间的内容
+2. 生成新卡片后，原样回填到人工备注区域
+3. 如果标记缺失或重复 → 在 _module-map.yaml 中标记 needs_review: true
+
+#### 新建模块卡片模板
 \`\`\`markdown
-# <module-name>
+---
+schema_version: 1
+doc_type: module-card
+module_id: <module-id>
+---
 
-> 最后更新：<now-date>
-> 最近变更：<change-name>
-> 模块路径：<glob patterns>
+# <module-id>
 
-## 职责
-（一句话说清这个模块做什么）
+## 定位
 
-## 当前设计
-（架构、数据流、关键逻辑 — 描述当前状态，不是历史）
+## 契约摘要
 
-## 对外接口
-| 接口 | 说明 | 调用方 |
-|------|------|--------|
-
-## 关键数据流
-\`\`\`text
-调用方 → 模块.方法() → 依赖模块.方法() → 返回结果
-\`\`\`
-
-## 设计决策
-| 决策 | 理由 | 来源 |
-|------|------|------|
-
-## 依赖关系
-### 依赖本模块
-### 本模块依赖
+## 关键逻辑
 
 ## 注意事项
-（维护提醒、已知限制、修改时需同步检查的模块）
 
-## 变更索引
-| 日期 | 变更 | 摘要 |
-|------|------|------|
+## 人工备注
+
+<!-- MANUAL_NOTES_START -->
+
+<!-- MANUAL_NOTES_END -->
 \`\`\`
 
+4. 展示所有更新内容（diff 摘要），请用户确认
+5. 用户确认后，写入 _module-map.yaml 和受影响的模块卡片
+6. 用户拒绝时，不写入，但提示"module-impact.md 已保留，可稍后手动同步"
+7. 回填 module-impact.md 的"更新结果"表格，区分目标：
+   - 目标列写 "\`_module-map.yaml: <module-id>\`" 或 "\`modules/<module-id>.md\`"
+8. **同步完成后**，运行 \`sillyspec modules rebuild\` 刷新索引（如果需要），或手动更新 dependencies.md
+
 ### 输出
-已更新的模块文档路径列表 + 用户确认状态`,
+已更新的文件路径列表 + 用户确认状态`,
       outputHint: '模块文档更新结果',
       optional: false
     },

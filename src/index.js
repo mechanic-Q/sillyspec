@@ -474,6 +474,45 @@ SillySpec platform — SillyHub 平台同步
       }
       break;
     }
+    case 'change-rename': {
+      const oldName = filteredArgs[1];
+      const newName = filteredArgs[2];
+      if (!oldName || !newName) {
+        console.error('❌ 用法: sillyspec change-rename <旧变更名> <新变更名>');
+        process.exit(1);
+      }
+      const pm = new ProgressManager();
+      await pm.renameChange(dir, oldName, newName);
+      break;
+    }
+    case 'modules': {
+      const modulesSub = filteredArgs[1];
+      if (!modulesSub || modulesSub === 'help' || modulesSub === '--help') {
+        console.log(`
+SillySpec modules — 模块文档管理
+
+用法:
+  sillyspec modules rebuild        从模块卡片 + 源码重建 _module-map.yaml
+  sillyspec modules status         显示模块索引状态
+  sillyspec modules migrate        旧格式模块文档迁移到新格式
+`);
+        break;
+      }
+      if (modulesSub === 'rebuild') {
+        const { rebuildModuleMap } = await import('./modules.js');
+        await rebuildModuleMap(dir);
+      } else if (modulesSub === 'status') {
+        const { showModuleStatus } = await import('./modules.js');
+        await showModuleStatus(dir);
+      } else if (modulesSub === 'migrate') {
+        const { migrateModuleDocs } = await import('./modules.js');
+        await migrateModuleDocs(dir);
+      } else {
+        console.error(`❌ 未知子命令: modules ${modulesSub}`);
+        process.exit(1);
+      }
+      break;
+    }
     default:
       console.error(`❌ 未知命令: ${command}`);
       printUsage();

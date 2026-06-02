@@ -394,6 +394,57 @@ export class ProgressManager {
   }
 
   /**
+   * 重命名变更：同步更新 DB + 目录
+   * @param {string} cwd - 项目根目录
+   * @param {string} oldName - 旧变更名
+   * @param {string} newName - 新变更名
+   */
+  async renameChange(cwd, oldName, newName) {
+    if (!oldName || !newName) {
+      console.warn('⚠️  renameChange: 旧名或新名为空，跳过');
+      return;
+    }
+    if (oldName === newName) {
+      console.warn('⚠️  renameChange: 新旧名称相同，跳过');
+      return;
+    }
+    const db = await this._ensureDB(cwd);
+    // 检查旧名是否存在
+    const existing = db.transaction((sqlDb) => {
+      const row = sqlDb.exec(`SELECT name, status FROM changes WHERE name = ?`, [oldName]);
+      if (!row || !row[0] || row[0].values.length === 0) return null;
+      return { name: row[0].values[0][0], status: row[0].values[0][1] };
+    });
+    if (!existing) {
+      console.error(`❌ 变更 ${oldName} 不存在`);
+      return;
+    }
+    // 检查新名是否已存在
+    const conflict = db.transaction((sqlDb) => {
+      const row = sqlDb.exec(`SELECT name FROM changes WHERE name = ?`, [newName]);
+      return row && row[0] && row[0].values.length > 0;
+    });
+    if (conflict) {
+      console.error(`❌ 变更 ${newName} 已存在`);
+      return;
+    }
+    // 重命名目录
+    const oldDir = this._changePath(cwd, oldName);
+    const newDir = this._changePath(cwd, newName);
+    if (existsSync(oldDir)) {
+      renameSync(oldDir, newDir);
+    } else {
+      mkdirSync(newDir, { recursive: true });
+    }
+    // 更新 DB
+    const now = new Date().toISOString();
+    db.transaction((sqlDb) => {
+      sqlDb.run(`UPDATE changes SET name = ?, last_active = ? WHERE name = ?`, [newName, now, oldName]);
+    });
+    console.log(`✅ 变更已重命名：${oldName} → ${newName}`);
+  }
+
+  /**
    * 从活跃列表移除变更（归档时调用，不物理删除）
    * SQL: UPDATE changes SET status = 'archived'
    */
