@@ -329,21 +329,21 @@ export function formatExecuteSummary({ changeName, stepsCompleted, stepsTotal, a
     // worktree 不存在（可能已 cleanup 或没有用过 worktree）
     lines.push(`Status:     COMPLETED`);
     lines.push(`Steps:      ${stepsCompleted} / ${stepsTotal}`);
-    lines.push(`Worktree:   N/A`);
+    lines.push(`Apply:      N/A`);
   } else {
     const hasBaseline = meta.baselineCommit != null;
     const wtExists = existsSync(meta.worktreePath);
 
-    // 检查 worktree 是否已 apply（不存在 = 已 cleanup = 已 apply，或从未创建）
-    const worktreeStatus = wtExists ? 'not applied' : 'applied (cleaned up)';
+    const applyStatus = wtExists ? 'pending' : 'applied';
+    const baselineCount = meta.baselineFiles?.length || 0;
     const baselineStatus = hasBaseline
-      ? `dirty (${meta.baselineFiles?.length || 0} files overlaid)`
+      ? `dirty (${baselineCount} baseline file${baselineCount === 1 ? '' : 's'} protected)`
       : 'clean';
 
     lines.push(`Status:     COMPLETED`);
     lines.push(`Steps:      ${stepsCompleted} / ${stepsTotal}`);
     lines.push(`Baseline:   ${baselineStatus}`);
-    lines.push(`Worktree:   ${worktreeStatus}`);
+    lines.push(`Apply:      ${applyStatus}`);
   }
 
   // --- Changed files ---
@@ -357,8 +357,14 @@ export function formatExecuteSummary({ changeName, stepsCompleted, stepsTotal, a
       const files = filesRaw ? filesRaw.trim().split('\n').filter(Boolean) : [];
       if (files.length > 0) {
         lines.push(``);
+        const maxShow = 10;
+        const showFiles = files.slice(0, maxShow);
+        const remain = files.length - maxShow;
         lines.push(`Changed Files (${files.length})`);
-        files.forEach(f => lines.push(`  ${f}`));
+        showFiles.forEach(f => lines.push(`  ${f}`));
+        if (remain > 0) {
+          lines.push(`  ... ${remain} more`);
+        }
       }
     } catch {}
   }
