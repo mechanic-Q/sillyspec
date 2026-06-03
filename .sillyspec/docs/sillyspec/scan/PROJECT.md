@@ -5,7 +5,7 @@ created_at: 2026-06-03T06:40:00+08:00
 
 # PROJECT — 项目概览
 
-## 简介
+## 项目简介
 
 SillySpec 是一个**规范驱动开发（Spec-Driven Development）工具包**，通过阶段式状态机让 AI 编码助手（如 Claude Code、Cursor）严格按照预定义步骤执行开发任务。它将软件开发流程拆解为可追踪、可验证的阶段（scan → brainstorm → plan → execute → verify → archive），每一步都有明确的输入/输出和完成条件。
 

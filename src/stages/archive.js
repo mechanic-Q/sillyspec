@@ -20,20 +20,21 @@ export const definition = {
     },
     {
       name: 'extract-module-impact',
-      prompt: `分析本次变更影响的模块，生成模块影响记录。
+      prompt: `按照 \`.sillyspec/workflows/archive-impact.yaml\` 中定义的 \`impact-analyzer\` 角色规则，分析本次变更影响的模块。
 
 ### 操作
-1. 读取变更目录下的 proposal.md、design.md、tasks.md
-2. 运行 \`git diff --name-only HEAD~1\`（或 \`git diff --name-only --cached\`）获取真实修改文件列表
-3. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`
+1. 读取 \`.sillyspec/workflows/archive-impact.yaml\`，了解角色定义和检查规则
+2. 读取变更目录下的 proposal.md、design.md、tasks.md
+3. 运行 \`git diff --name-only HEAD~1\`（或 \`git diff --name-only --cached\`）获取真实修改文件列表
+4. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`
    - **如果不存在**：提示"建议运行 scan 生成模块映射"，但继续执行。跳到步骤 7 生成只有 unmapped 部分的 module-impact.md
-4. 三重交叉验证：
+5. 三重交叉验证：
    - 声明范围：proposal.md / design.md 中的"变更范围"/"文件变更清单"
    - 任务范围：tasks.md / plan.md 中的任务文件路径
    - 真实变更：git diff 文件列表
    - **以 git diff 为准**（真实 > 声明）
-5. 将 git diff 文件按 \`_module-map.yaml\` 的 paths glob 匹配到模块
-6. 生成模块影响矩阵：
+6. 将 git diff 文件按 \`_module-map.yaml\` 的 paths glob 匹配到模块
+7. 生成模块影响矩阵：
 
 | 模块 | 影响类型 | 相关文件 | 更新内容摘要 | needs_review |
 |------|----------|----------|-------------|-------------|
@@ -41,33 +42,10 @@ export const definition = {
    影响类型：逻辑变更 / 数据结构变更 / 接口变更 / 调用关系变更 / 配置变更 / 新增
    needs_review：如果影响无法完全确定，标记为 true
 
-7. 未匹配到任何模块的文件归入"未匹配文件"表格
-8. 生成 \`.sillyspec/changes/<change-name>/module-impact.md\`，格式：
-
-\`\`\`markdown
-# 模块影响分析
-
-author: <git-user>
-created_at: <now-datetime>
-
-## 变更：<change-name>
-
-## 模块影响矩阵
-| 模块 | 影响类型 | 相关文件 | 更新内容摘要 | needs_review |
-|------|----------|----------|-------------|-------------|
-
-## 未匹配文件
-| 文件路径 | 说明 |
-|----------|------|
-
-## 更新结果
-（sync-module-docs 步骤完成后回填）
-| 目标 | 操作 | 状态 |
-|------|------|------|
-\`\`\`
-
-### 输出
-module-impact.md 路径 + 影响模块数量 + 未匹配文件数量`,
+8. 未匹配到任何模块的文件归入"未匹配文件"表格
+9. 生成 \`.sillyspec/changes/<change-name>/module-impact.md\`
+10. 完成后运行 workflow 检查：
+    \`node -e "import('./src/workflow.js').then(w => { /* 用 loadWorkflow 加载 archive-impact，用 runPostCheck 检查 */ })\``,
       outputHint: 'module-impact.md 路径 + 影响摘要',
       optional: false
     },

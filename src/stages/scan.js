@@ -37,117 +37,101 @@ export const definition = {
       optional: false
     },
     {
-      name: '检查已有扫描文档和子项目列表',
-      prompt: `检查已有扫描文档和子项目列表。
+      name: '构建扫描项目列表',
+      prompt: `确定本次要扫描的项目列表。
 
 ### 操作
-1. \`ls .sillyspec/projects/*.yaml 2>/dev/null | grep -q .\` — 检查已有文档
-1. \`ls .sillyspec/docs/*/scan/ 2>/dev/null\` — 检查已有文档
-2. \`wc -l .sillyspec/docs/*/scan/*.md 2>/dev/null\` — 文档行数
-3. 显示子项目列表供选择扫描范围
+1. \`ls .sillyspec/projects/*.yaml 2>/dev/null\` — 列出所有已注册项目
+2. 对每个项目，检查已有的 scan 文档状态：\`ls .sillyspec/docs/<project>/scan/*.md 2>/dev/null\`
+3. 按以下格式展示：
 
-### ⛔ 重要：已有文档时的处理
-如果发现已有 scan 文档（如 7 份齐全），**必须停下来问用户**：
-- 列出已有文档状态（哪些存在、哪些缺失）
-- 明确提供两个选项：**重新扫描（全部覆盖）** 或 **只补扫描缺失的文档**
+\`\`\`
+扫描项目列表：
+1. sillyspec（主项目）— scan 文档：0/7 已存在
+2. dashboard（子项目）— scan 文档：0/7 已存在
+\`\`\`
+
+4. **必须停下来问用户**：
+   - 选择要扫描的项目（默认全部）
+   - 每个项目的扫描策略：**重新扫描（全部覆盖）** / **只补扫描缺失的文档** / **跳过**
+
+### ⛔ 重要
 - **不要自行决定跳过**，等用户选择后再继续
+- 最终确定的项目列表将用于后续所有步骤
+- **后续每个需要生成文档的步骤，都必须对列表中的每个项目分别执行**
 
 ### 输出
-已有文档状态 + 等待用户选择`,
-      outputHint: '工作区和文档状态',
+确认后的扫描项目列表（项目名 + 扫描策略）`,
+      outputHint: '扫描项目列表',
       optional: false
     },
     {
       name: '构建环境探测',
-      prompt: `探测项目的构建环境和依赖。
+      prompt: `对扫描列表中的**每个项目**，分别探测构建环境和依赖。
 
 ### 操作
-1. \`cat package.json pom.xml build.gradle go.mod Cargo.toml requirements.txt pyproject.toml Gemfile composer.json 2>/dev/null\`
-2. \`find . -maxdepth 2 -name "*.config.*" -not -path "*/node_modules/*" -not -path "*/.git/*" | head -20 | xargs cat 2>/dev/null\`
-3. 结果保存到 \`.sillyspec/docs/<project>/scan/_env-detect.md\`（临时文件，扫描完删除）
+对扫描列表中的每个项目重复以下操作：
+1. 进入项目目录（子项目用其 path，如 \`packages/dashboard/\`）
+2. \`cat package.json pom.xml build.gradle go.mod Cargo.toml requirements.txt pyproject.toml Gemfile composer.json 2>/dev/null\`
+3. \`find <project-dir> -maxdepth 2 -name "*.config.*" -not -path "*/node_modules/*" -not -path "*/.git/*" | head -20 | xargs cat 2>/dev/null\`
+4. 结果保存到 \`.sillyspec/docs/<project>/scan/_env-detect.md\`（临时文件，扫描完删除）
 
 ### 输出
-环境探测结果摘要`,
+每个项目的环境探测结果摘要`,
       outputHint: '环境探测摘要',
       optional: false
     },
     {
       name: '断点续扫检测',
-      prompt: `检测已有扫描文档，只生成缺失的。
+      prompt: `对扫描列表中的**每个项目**，分别检测已有扫描文档，只生成缺失的。
 
 ### 操作
-1. \`PROJECT=$(sqlite3 -json '.sillyspec/.runtime/sillyspec.db' "SELECT name FROM project WHERE id=1" 2>/dev/null | node -e "const r=JSON.parse(require('fs').readFileSync(0,'utf8'));console.log(r.length>0?r[0].name:'')" 2>/dev/null || basename "$(pwd)")\`
-2. 检查 7 份文档是否存在：ARCHITECTURE、STRUCTURE、CONVENTIONS、INTEGRATIONS、TESTING、CONCERNS、PROJECT
-3. 列出已有 ✅ 和缺失 ⬜
-4. 只生成缺失的文档
+对扫描列表中的每个项目分别执行：
+1. 检查 7 份文档是否存在：ARCHITECTURE、STRUCTURE、CONVENTIONS、INTEGRATIONS、TESTING、CONCERNS、PROJECT
+   路径：\`.sillyspec/docs/<project>/scan/<DOC>.md\`
+2. 列出已有 ✅ 和缺失 ⬜
 
 ### 输出
-已有/缺失文档列表`,
+每个项目的已有/缺失文档列表`,
       outputHint: '断点续扫状态',
       optional: false
     },
     {
       name: '深度扫描 — 7 份文档（子代理并行）',
-      prompt: `使用子代理并行生成 7 份扫描文档。**你必须使用子代理执行，不要自己写文档。**
+      prompt: `对扫描列表中的**每个项目**，按照 \`.sillyspec/workflows/scan-docs.yaml\` 中定义的角色和检查规则，使用子代理并行生成 7 份扫描文档。
 
-### 执行方式
-1. 为每个扫描任务启动独立子代理（可并行），每个子代理负责 1-2 份文档
-2. 子代理直接用 grep/rg 搜索源码并写入文件，结果不回传到你的上下文
-3. 等待所有子代理完成后，验证文件是否生成且非空
+**你必须使用子代理执行，不要自己写文档。**
+**对扫描列表中的每个项目分别执行以下流程。**
 
-### 子代理任务分配
+### 操作
+1. 读取 \`.sillyspec/workflows/scan-docs.yaml\`，了解角色定义、输出要求和检查规则
+2. 对每个项目（扫描列表中标记为需生成/覆盖的项目）：
+   a. 将 \`<project>\` 替换为实际项目名，得到该项目的目标文件路径
+   b. 为每个角色启动独立子代理（可并行），每个子代理负责 1-2 份文档
+   c. 子代理的搜索范围限定在该项目目录内（子项目如 \`packages/dashboard/\`，不要搜索主项目源码）
+   d. 子代理直接用 grep/rg 搜索源码并写入文件，结果不回传到你的上下文
+   e. 等待该项目所有子代理完成后，验证文件是否生成且非空
+   f. 该项目完成后，继续下一个项目
+3. 所有项目完成后，运行以下命令检查产物：
+   \`node -e "import('./src/workflow.js').then(w => { const r = w.runPostCheck(w.loadWorkflow('.', 'scan-docs'), '.', '<project>'); console.log(w.formatCheckReport(r)) })\`
+   对每个项目分别执行（将 \`<project>\` 替换为实际项目名）
+4. 如果检查报告有失败项，按报告中的角色和文件重试失败的部分
 
-**子代理 A — 技术架构**
-目标文件：\`.sillyspec/docs/<project>/scan/ARCHITECTURE.md\`
-搜索范围：技术栈 + 数据库 Schema + 架构模式
-- 用 grep/rg 搜索（\`@Entity\`、\`schema.prisma\`、\`models.py\` 等），**禁止读源码全文**
-- Schema 只记表名+说明+字段数
-- 包含 \`## 技术栈\` \`## 架构概览\` \`## 数据模型（摘要）\`
-- 参考 _env-detect.md（如存在）
-
-**子代理 B — 代码约定**
-目标文件：\`.sillyspec/docs/<project>/scan/CONVENTIONS.md\`
-搜索范围：框架隐形规则 + 实体继承 + 代码风格
-- 用 grep 搜索拦截器/插件/逻辑删除/基类/审计字段，**禁止读源码全文**
-- 根据检测到的语言/框架自行决定搜索什么模式
-- 提取 3-5 个典型示例
-- 包含 \`## 框架隐形规则\` \`## 实体继承规范\` \`## 代码风格\`
-- 参考 _env-detect.md（如存在）
-
-**子代理 C — 目录结构 + 外部集成**
-目标文件：\`.sillyspec/docs/<project>/scan/STRUCTURE.md\` + \`.sillyspec/docs/<project>/scan/INTEGRATIONS.md\`
-搜索范围：目录树 + 模块说明 + 外部集成
-- 用 find/ls/tree 和 grep，**禁止读源码全文**
-- 搜索 API 调用、MQ 配置、缓存、第三方 SDK
-- STRUCTURE.md：目录树+模块说明
-- INTEGRATIONS.md：外部集成（按类型分组）
-- 参考 _env-detect.md（如存在）
-
-**子代理 D — 测试 + 债务 + 项目概览**
-目标文件：\`.sillyspec/docs/<project>/scan/TESTING.md\` + \`.sillyspec/docs/<project>/scan/CONCERNS.md\` + \`.sillyspec/docs/<project>/scan/PROJECT.md\`
-搜索范围：测试文件 + TODO/FIXME + 过时依赖 + 项目信息
-- 用 grep 搜索测试文件、TODO/FIXME、过时依赖，**禁止读源码全文**
-- TESTING.md：测试结构
-- CONCERNS.md：技术债务（按严重程度分组）
-- PROJECT.md：项目概览
-- 参考 _env-detect.md（如存在）
-
-### 每个子代理的共同要求
-- **上下文注入**：主 agent 在启动子代理前，必须将以下信息拼入子代理 prompt：
-  - 项目名（直接用本次 prompt 中的实际项目名）
-  - 断点续扫步骤列出的缺失文档列表（哪些要生成、哪些跳过）
-  - 环境探测结果摘要（构建工具、语言框架、关键依赖）
-  - _env-detect.md 内容（如存在，直接贴入）
-- 路径用反引号，不编造
-- 目标文件不存在则创建，已存在则覆盖
-- 只生成缺失文档（根据断点续扫结果）
+### 子代理上下文注入
+启动每个子代理前，将以下信息拼入子代理 prompt：
+- 项目名（直接用实际项目名）
+- 目标文件路径（从 workflow YAML 中 \`<project>\` 替换后的路径）
+- 检查要求（从 workflow YAML 中该角色的 checks）
+- 断点续扫步骤列出的缺失文档列表
+- 环境探测结果摘要（如有 _env-detect.md，直接贴入）
+- **⚠️ 必须强调：子代理必须用 write 工具将文件写入磁盘**
 
 ### 完成后
-验证 7 份文档全部生成且非空，列出结果：
+列出每个项目的 7 份文档状态：
 - ✅ ARCHITECTURE.md / ❌ 缺失
 - ✅ CONVENTIONS.md / ❌ 缺失
 - ...`,
-      outputHint: '7 份文档生成状态',
+      outputHint: '7 份文档生成状态（含 workflow 检查报告）',
       optional: false
     },
     {
@@ -191,13 +175,14 @@ local.yaml 生成结果（已存在/已生成）`,
     },
     {
       name: '生成模块映射',
-      prompt: `生成模块索引文件 \`_module-map.yaml\`，它是 agent 高频读取的机器索引。
+      prompt: `对扫描列表中的**每个项目**，分别生成模块索引文件 \`_module-map.yaml\`。
 
 ### ⚠️ 重要：这个文件是唯一的结构化索引源
 所有结构化事实（paths/tags/entrypoints/depends_on/used_by）只维护在这个文件里。
 模块卡片（modules/*.md）只负责人类语义说明，不重复索引信息。
 
 ### 操作
+对扫描列表中的每个项目分别执行：
 1. 检查 \`.sillyspec/docs/<project>/modules/_module-map.yaml\` 是否已存在，已存在则跳过
 2. 分析项目源码目录结构，识别模块划分：
    - 用 \`find . -maxdepth 3 -type d -not -path "*/node_modules/*" -not -path "*/.git/*"\` 查看目录结构
@@ -307,13 +292,14 @@ _module-map.yaml 生成结果（已存在/已生成/模块列表）`,
     },
     {
       name: '生成模块卡片文档',
-      prompt: `根据 _module-map.yaml 中的模块划分，为每个模块生成精简卡片文档。
+      prompt: `对扫描列表中的**每个项目**，根据各自的 \`_module-map.yaml\` 生成模块卡片文档。
 
 ### ⚠️ 重要：模块卡片只负责人类语义说明
 结构化索引（paths/tags/entrypoints/depends_on/used_by）已经在 _module-map.yaml 里维护。
 卡片里不要重复这些信息，只写 _module-map.yaml 无法表达的语义内容。
 
 ### 操作
+对扫描列表中的每个项目分别执行：
 1. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`，获取模块列表和路径
 2. 检查 \`.sillyspec/docs/<project>/modules/\` 下已有的模块文档（<module>.md）
 3. 列出每个模块的状态：已有文档 / 缺失
@@ -449,18 +435,19 @@ step1 → step2 → step3
     },
     {
       name: '自检和提交',
-      prompt: `验证扫描完整性，清理并提交。
+      prompt: `对扫描列表中的**每个项目**，分别验证扫描完整性，清理并提交。
 
 ### 操作
-1. 检查 7 份 scan 文档是否全部生成
-2. 检查模块文档状态（如有）
+对扫描列表中的每个项目分别执行：
+1. 检查 7 份 scan 文档是否全部生成（\`.sillyspec/docs/<project>/scan/\`）
+2. 检查模块文档状态（\`.sillyspec/docs/<project>/modules/\`）
 3. 自检门控：ARCHITECTURE（技术栈+Schema摘要）、CONVENTIONS（隐形规则+代码风格）、STRUCTURE（目录结构）、INTEGRATIONS（外部依赖）、TESTING（测试现状）、CONCERNS（技术债务）、PROJECT（项目概览）
 4. 检查 flows/ 和 glossary.md 是否已生成（如有）
 5. 清理：\`rm -f .sillyspec/docs/<project>/scan/_env-detect.md\`
 6. \`git add .sillyspec/\` — 暂存扫描结果（不要 commit，由用户通过统一提交工具处理）
 
 ### 输出
-扫描完整性报告
+每个项目的扫描完整性报告
 
 ### 注意
 - ❌ 修改代码 / 编造路径 / 读源码全文`,

@@ -1,0 +1,194 @@
+schema_version: 1
+project: dashboard
+source_commit: 36e8cc8
+generated_at: 2026-06-03T10:18:00+08:00
+generator: sillyspec-scan
+
+modules:
+  server-index:
+    status: active
+    doc: modules/server-index.md
+    paths:
+      - "packages/dashboard/server/index.js"
+    tags:
+      - server
+      - http
+      - websocket
+      - api
+      - router
+    aliases:
+      - api-server
+      - ws-server
+    entrypoints:
+      - startServer
+      - broadcast
+      - discoverProjects
+    main_symbols:
+      - startServer
+      - broadcast
+      - discoverProjects
+    depends_on:
+      - server-parser
+      - server-watcher
+      - server-executor
+    used_by: []
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  server-parser:
+    status: active
+    doc: modules/server-parser.md
+    paths:
+      - "packages/dashboard/server/parser.js"
+    tags:
+      - parser
+      - output
+      - git
+      - techstack
+    aliases:
+      - output-parser
+      - cli-parser
+    entrypoints:
+      - parseProjectOverview
+      - parseGitDetail
+      - parseTechStackDetail
+      - parseDocsList
+      - parseDocsTree
+      - parseSillyspecDocsTree
+      - parseProjectState
+      - parseSpecFile
+    main_symbols:
+      - parseProjectOverview
+      - parseGitDetail
+      - parseProjectState
+      - parseDocsTree
+    depends_on: []
+    used_by:
+      - server-index
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  server-watcher:
+    status: active
+    doc: modules/server-watcher.md
+    paths:
+      - "packages/dashboard/server/watcher.js"
+    tags:
+      - chokidar
+      - file-watcher
+      - scan-paths
+    aliases:
+      - watcher
+      - file-monitor
+    entrypoints:
+      - startWatcher
+      - stopWatcher
+      - addCustomScanPath
+      - removeCustomScanPath
+      - getCustomScanPaths
+      - customScanPaths
+      - getProjectStates
+    main_symbols:
+      - startWatcher
+      - stopWatcher
+      - customScanPaths
+    depends_on: []
+    used_by:
+      - server-index
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  server-executor:
+    status: active
+    doc: modules/server-executor.md
+    paths:
+      - "packages/dashboard/server/executor.js"
+    tags:
+      - executor
+      - cli
+      - child-process
+      - spawn
+    aliases:
+      - command-executor
+      - cli-runner
+    entrypoints:
+      - executeCommand
+      - executeNextStep
+      - executeProgressStatus
+      - executeReset
+    main_symbols:
+      - executeCommand
+      - executeNextStep
+      - executeProgressStatus
+      - executeReset
+    depends_on: []
+    used_by:
+      - server-index
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  composables:
+    status: active
+    doc: modules/composables.md
+    paths:
+      - "packages/dashboard/src/composables/*.js"
+    tags:
+      - composable
+      - vue
+      - state
+      - websocket
+      - keyboard
+      - layout
+    aliases:
+      - hooks
+      - use-functions
+    entrypoints:
+      - useDashboard
+      - useWebSocket
+      - useKeyboard
+      - useDashboardKeyboard
+      - useLayout
+    main_symbols:
+      - useDashboard
+      - useWebSocket
+      - useKeyboard
+      - useLayout
+    depends_on: []
+    used_by: []
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  components:
+    status: active
+    doc: modules/components.md
+    paths:
+      - "packages/dashboard/src/components/**/*.vue"
+    tags:
+      - vue
+      - ui
+      - components
+    aliases:
+      - views
+      - ui-components
+    entrypoints:
+      - App
+      - CommandPalette
+      - ProjectList
+      - PipelineView
+      - DetailPanel
+    main_symbols:
+      - App
+      - CommandPalette
+      - ProjectList
+      - PipelineView
+    depends_on:
+      - composables
+    used_by: []
+    needs_review: false
+    concerns: []
+    review_reasons: []

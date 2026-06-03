@@ -687,6 +687,65 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
 
   const defSteps = await getStageSteps(stageName, cwd, progress)
   console.log(`✅ Step ${currentIdx + 1}/${steps.length} 完成：${steps[currentIdx].name}\n`)
+
+  // Workflow post_check：scan step 5 完成后自动检查产物
+  if (stageName === 'scan' && steps[currentIdx]?.name?.includes('深度扫描')) {
+    try {
+      const { loadWorkflow, runPostCheck, formatCheckReport, generateRetryPrompt } = await import('./workflow.js')
+      const wf = loadWorkflow(cwd, 'scan-docs')
+      if (wf) {
+        // 获取所有已注册项目
+        const projectsDir = join(cwd, '.sillyspec', 'projects')
+        const projectFiles = existsSync(projectsDir)
+          ? readdirSync(projectsDir).filter(f => f.endsWith('.yaml'))
+          : []
+        const projectNames = projectFiles.map(f => f.replace(/\.yaml$/, ''))
+
+        let anyFailed = false
+        for (const pName of projectNames) {
+          const result = runPostCheck(wf, cwd, pName)
+          const report = formatCheckReport(result)
+          console.log(report)
+          if (!result.passed) {
+            anyFailed = true
+            const retryPrompt = generateRetryPrompt(wf, result, pName)
+            console.log(`\n🔄 重试提示（项目 ${pName}）：\n`)
+            console.log(retryPrompt)
+          }
+        }
+        if (anyFailed) {
+          console.log(`\n⚠️ 存在检查失败项，请按上面的重试提示修复后再继续。`)
+        }
+      }
+    } catch (e) {
+      console.warn(`⚠️ workflow 检查跳过：${e.message}`)
+    }
+  }
+
+  // Workflow post_check：archive extract-module-impact 完成后检查产物
+  if (stageName === 'archive' && steps[currentIdx]?.name?.includes('extract-module-impact')) {
+    try {
+      const { loadWorkflow, runPostCheck, formatCheckReport } = await import('./workflow.js')
+      const wf = loadWorkflow(cwd, 'archive-impact')
+      if (wf && changeName) {
+        const raw = JSON.stringify(wf)
+        const resolved = JSON.parse(raw.replace(/<change-name>/g, changeName))
+        const result = runPostCheck(resolved, cwd, 'sillyspec')
+        // 只报告 impact-analyzer 的结果（doc-syncer 是后续步骤）
+        const impactResult = result.roleResults.find(r => r.roleId === 'impact-analyzer')
+        if (impactResult) {
+ const icon = impactResult.passed ? '✅' : '❌'
+          console.log(`${icon} module-impact.md 检查${impactResult.passed ? '通过' : '失败'}`)
+          for (const f of impactResult.failures) {
+            console.log(`   └─ ${f}`)
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(`⚠️ workflow 检查跳过：${e.message}`)
+    }
+  }
+
   if (printNext) {
     await outputStep(stageName, nextPendingIdx, defSteps, cwd, changeName, progress.project || null)
   }
