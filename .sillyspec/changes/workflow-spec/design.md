@@ -261,46 +261,42 @@ outputs:
 
 ## 落地节奏
 
-### Phase 0：workflow schema + post_check runner（本次目标）
+### Phase 0：workflow schema + post_check runner ✅ IMPLEMENTED
 
-**改动范围**：run.js + 新增 workflow 检查器模块
+**改动范围**：run.js + 新增 workflow 模块
 
-**具体工作**：
-1. 定义 workflow YAML schema（`src/workflow-schema.js`）
-2. scan step 5 仍然按现有 prompt 跑，主 agent 仍负责调度子代理
-3. 跑完后 run.js 根据 workflow YAML 做 post_check
-4. 检查失败 → 输出明确报告：哪个 role 缺什么文件
-5. 主 agent 根据报告重试失败项
+**已实现**：
+1. ✅ workflow YAML schema（`.sillyspec/workflows/*.yaml`）
+2. ✅ scan step 5 后 run.js 自动 post_check
+3. ✅ 检查失败 → 明确报告（结构化 result：workflow/status/roles/failures/retry_prompts）
+4. ✅ CLI `sillyspec workflow check <name> --project <p> [--json] [--save]`
+5. ✅ exit code 语义：0=pass, 1=check fail, 2=param/schema error
 
-**不做什么**：
-- 不改子代理调度逻辑
-- 不实现代码启动 subagent
-- 不加新阶段
 
-### Phase 1：role-level checks + failed role retry prompt
+### Phase 1：role-level checks + failed role retry prompt ✅ IMPLEMENTED
 
-在 Phase 0 基础上：
-- 按 role id 汇总检查结果
-- 自动生成重试 prompt（含失败证据）
-- 支持按 role 重试
+- ✅ 按 role id 汇总检查结果（结构化 roles[].outputs[].checks）
+- ✅ 自动生成 retry_prompts（内建在 result 对象中）
+- ✅ `generateRetryPrompt()` deprecated，直接用 `result.retry_prompts`
 
-### Phase 2：scan step 5 引用 workflow spec
+### Phase 2：scan step 5 引用 workflow spec ✅ IMPLEMENTED
 
-- scan step 5 的 prompt 改为引用 workflow 名称
-- 主 agent 从 workflow YAML 读取角色定义和约束
-- 不再硬编码 4 个子代理的分配逻辑
+- ✅ scan 阶段按项目展开步骤，每步引用 workflow spec
+- ✅ post_check 在 scan 完成后自动检查所有项目
 
-### Phase 3：run.js 代码调度 role
+### Phase 3：run.js 代码调度 role ✅ IMPLEMENTED
 
-- run.js 根据 workflow spec 生成各 role 的 prompt
-- 通过 CLI 参数或 stdin 要求主 agent 分别执行
-- Level 2 能力
+- ✅ `generateRolePrompt()` 根据 role 定义生成子代理 prompt
+- ✅ `generateAllRolePrompts()` 批量生成
+- ✅ depends_on 依赖输出自动注入 prompt
+- Level 2 能力已实现
 
-### Phase 4：archive impact extraction workflow
+### Phase 4：archive impact extraction workflow ✅ IMPLEMENTED
 
-- 新增 `.sillyspec/workflows/archive-impact.yaml`
-- write_mode: patch_only
-- 验证模式可复用性
+- ✅ `archive-impact.yaml` 已定义（impact-analyzer + doc-syncer）
+- ✅ write_mode: patch_only
+- ✅ depends_on 显式声明依赖
+- ✅ 真实 git diff 验证通过（PASS）
 
 ### Phase 5：executor adapter（远期）
 
@@ -314,4 +310,6 @@ outputs:
 2. **不替代 stage** — stage 管整体流程，workflow 管阶段内并行执行
 3. **不做通用 DAG** — 先只支持 parallel 和 sequential
 4. **不着急接 Claude Dynamic Workflow adapter** — 先验证 SillySpec 自己的检查+重试模式
-5. **第一版不实现 agent runtime** — 不承诺 Level 3
+5. **不实现 Level 3 executor** — 不承诺 agent runtime
+6. **不做 UI**
+7. **不改 workflow schema** — 当前 schema 已验证稳定
