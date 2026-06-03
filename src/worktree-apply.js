@@ -311,10 +311,11 @@ export function applyWorktree(changeName, { cwd, checkOnly = false } = {}) {
  * @param {number} opts.stepsCompleted - 已完成步骤数
  * @param {number} opts.stepsTotal - 总步骤数
  * @param {string} opts.agentSummary - Agent 最终输出摘要
+ * @param {string} [opts.cwd] - 项目根目录（默认 process.cwd()）
  * @returns {string} 格式化的 summary 文本
  */
-export function formatExecuteSummary({ changeName, stepsCompleted, stepsTotal, agentSummary }) {
-  const wm = new WorktreeManager();
+export function formatExecuteSummary({ changeName, stepsCompleted, stepsTotal, agentSummary, cwd }) {
+  const wm = new WorktreeManager({ cwd });
   const meta = wm.getMeta(changeName);
   const lines = [];
 

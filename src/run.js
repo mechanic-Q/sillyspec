@@ -754,6 +754,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
           stepsCompleted: total,
           stepsTotal: total,
           agentSummary: lastOutput,
+          cwd,
         })
         console.log(`\n${summary}`)
       } catch (e) {
