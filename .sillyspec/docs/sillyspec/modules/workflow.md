@@ -172,6 +172,11 @@ workflow YAML → 替换 <project>/<change-name> 占位符
 - `.sillyspec/.runtime/` 已在 .gitignore，runtime 文件不进 git
 - CLI `--save` 默认关闭，run.js 在 scan/archive post_check 后自动保存
 - 保存失败只输出 warning，不影响 workflow check 的 exit code
+- execute 阶段创建 worktree 时自动 overlay 主工作区 dirty baseline 并创建 baseline checkpoint
+  - 无 dirty baseline 时 baselineCommit = null（正常行为，不是异常）
+  - 子代理产物从 baselineCommit 计算 task diff，merge 只合 task diff
+  - merge 前校验主工作区 baseline hash 未变化，防止 execute 期间主工作区被修改
+  - 详见 `worktree.md` 模块文档
 
 ## 已知约束
 

@@ -24,7 +24,7 @@ updated_at: 2026-06-03 16:00:00
 │   │   └── <timestamp>-<workflow>-<project>-<status>.json
 │   └── worktrees/              ← git worktree 隔离环境
 │       └── <change-name>/
-│           └── meta.json        ← worktree 元数据
+│           └── meta.json        ← worktree 元数据（含 baselineCommit/baselineHash）
 ├── changes/                     ← 变更工作区（git tracked）
 │   ├── <change-name>/          ← 活跃变更目录
 │   │   ├── proposal.md         ← 动机与变更范围
