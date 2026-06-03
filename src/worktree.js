@@ -10,7 +10,7 @@
 
 import { execSync } from 'child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync } from 'fs';
-import { join, resolve } from 'path';
+import { join, resolve, dirname } from 'path';
 
 const WORKTREES_REL = '.sillyspec/.runtime/worktrees';
 const BRANCH_PREFIX = 'sillyspec/';
@@ -175,16 +175,19 @@ export class WorktreeManager {
  // fetch/merge 失败不影响 worktree 创建，只记录警告
     }
 
+    // 5.6 Dirty baseline overlay：将主工作区未提交变更同步到 worktree
+    const baselineFiles = this._overlayBaseline(this.cwd, worktreePath);
+
     // 6. 写入 meta.json
     const meta = {
       changeName: name,
       branch,
       baseBranch,
       baseHash,
-      // actualBaseHash 记录 fetch+merge 后的实际 HEAD（可能与 baseHash 不同）
       actualBaseHash: gitQuiet(worktreePath, 'rev-parse HEAD') || baseHash,
       createdAt: new Date().toISOString(),
       worktreePath,
+      baselineFiles,
     };
 
     const metaPath = join(worktreePath, META_FILE);
@@ -259,5 +262,72 @@ export class WorktreeManager {
     if (existsSync(worktreePath)) {
       rmSync(worktreePath, { recursive: true, force: true });
     }
+  }
+
+  /**
+   * 将主工作区未提交变更同步到 worktree（dirty baseline overlay）
+   * 覆盖 staged + unstaged 的文件变更，以及 untracked 文件。
+   * 使用 git diff + git apply 确保正确处理删除/rename/binary。
+   * @param {string} mainCwd - 主工作区路径
+   * @param {string} worktreePath - worktree 路径
+   * @returns {Array<string>} overlay 的文件列表
+   */
+  _overlayBaseline(mainCwd, worktreePath) {
+    const files = [];
+    try {
+      // staged 变更
+      const staged = gitQuiet(mainCwd, 'diff --cached --name-only') || '';
+      if (staged) {
+        try {
+          const patchContent = execSync(`git diff --cached --binary`, { cwd: mainCwd, encoding: 'utf8', stdio: ['pipe','pipe','pipe'] });
+          if (patchContent) {
+            const patchFile = join(worktreePath, '.sillyspec-baseline-staged.patch');
+            writeFileSync(patchFile, patchContent);
+            git(worktreePath, `apply --binary ${patchFile}`);
+            rmSync(patchFile, { force: true });
+          }
+        } catch (e) {
+          console.warn('⚠️ baseline staged overlay 部分失败:', e.message);
+        }
+        files.push(...staged.split('\n').filter(Boolean));
+      }
+
+      // unstaged 变更
+      const unstaged = gitQuiet(mainCwd, 'diff --name-only') || '';
+      if (unstaged) {
+        try {
+          const patchContent = execSync(`git diff --binary`, { cwd: mainCwd, encoding: 'utf8', stdio: ['pipe','pipe','pipe'] });
+          if (patchContent) {
+            const patchFile = join(worktreePath, '.sillyspec-baseline-unstaged.patch');
+            writeFileSync(patchFile, patchContent);
+            git(worktreePath, `apply --binary ${patchFile}`);
+            rmSync(patchFile, { force: true });
+          }
+        } catch (e) {
+          console.warn('⚠️ baseline unstaged overlay 部分失败:', e.message);
+        }
+        files.push(...unstaged.split('\n').filter(Boolean));
+      }
+
+      // untracked 文件（排除 .sillyspec/.runtime 等）
+      const untracked = gitQuiet(mainCwd, 'ls-files --others --exclude-standard') || '';
+      if (untracked) {
+        for (const f of untracked.split('\n').filter(Boolean)) {
+          const src = join(mainCwd, f);
+          const dst = join(worktreePath, f);
+          if (existsSync(src)) {
+            mkdirSync(dirname(dst), { recursive: true });
+            try { writeFileSync(dst, readFileSync(src)); files.push(f); } catch {}
+          }
+        }
+      }
+
+      if (files.length > 0) {
+        console.log(`📁 baseline overlay: ${files.length} 个未提交文件已同步到 worktree`);
+      }
+    } catch (e) {
+      console.warn('⚠️ baseline overlay 失败:', e.message);
+    }
+    return [...new Set(files)];
   }
 }
