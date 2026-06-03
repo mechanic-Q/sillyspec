@@ -302,10 +302,11 @@ export class WorktreeManager {
       const staged = gitQuiet(mainCwd, 'diff --cached --name-only') || '';
       if (staged) {
         try {
-          const patchContent = execSync(`git diff --cached --binary`, { cwd: mainCwd, encoding: 'utf8', stdio: ['pipe','pipe','pipe'] });
-          if (patchContent) {
+          // 用 Buffer 模式读取，避免二进制 patch 被 UTF-8 解码损坏
+          const patchBuf = execSync(`git diff --cached --binary`, { cwd: mainCwd, stdio: ['pipe','pipe','pipe'] });
+          if (patchBuf && patchBuf.length > 0) {
             const patchFile = join(worktreePath, '.sillyspec-baseline-staged.patch');
-            writeFileSync(patchFile, patchContent);
+            writeFileSync(patchFile, patchBuf);
             git(worktreePath, `apply --binary ${patchFile}`);
             rmSync(patchFile, { force: true });
           }
@@ -319,10 +320,11 @@ export class WorktreeManager {
       const unstaged = gitQuiet(mainCwd, 'diff --name-only') || '';
       if (unstaged) {
         try {
-          const patchContent = execSync(`git diff --binary`, { cwd: mainCwd, encoding: 'utf8', stdio: ['pipe','pipe','pipe'] });
-          if (patchContent) {
+          // 用 Buffer 模式读取，避免二进制 patch 被 UTF-8 解码损坏
+          const patchBuf = execSync(`git diff --binary`, { cwd: mainCwd, stdio: ['pipe','pipe','pipe'] });
+          if (patchBuf && patchBuf.length > 0) {
             const patchFile = join(worktreePath, '.sillyspec-baseline-unstaged.patch');
-            writeFileSync(patchFile, patchContent);
+            writeFileSync(patchFile, patchBuf);
             git(worktreePath, `apply --binary ${patchFile}`);
             rmSync(patchFile, { force: true });
           }

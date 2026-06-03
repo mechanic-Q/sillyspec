@@ -92,9 +92,17 @@ export function applyWorktree(changeName, { cwd, checkOnly = false } = {}) {
   // 同时检测 untracked 新文件（git diff 不包含 untracked）
   let changedFiles;
   try {
-    // tracked 文件的变更（modified/deleted）
-    const trackedRaw = git(worktreePath, `diff --name-only ${diffBase}`);
-    const trackedFiles = trackedRaw ? trackedRaw.split('\n').filter(Boolean) : [];
+    // 用 --name-status 捕获 rename/delete（--name-only 会丢失 rename 源文件）
+    const statusRaw = git(worktreePath, `diff --name-status ${diffBase}`);
+    const statusFiles = new Set();
+    if (statusRaw) {
+      for (const line of statusRaw.split('\n').filter(Boolean)) {
+        const parts = line.split('\t');
+        // R100 old.txt new.txt → 提取两个文件
+        if (parts.length >= 2) statusFiles.add(parts[parts.length - 1]);
+        if (parts.length >= 3) statusFiles.add(parts[parts.length - 2]);
+      }
+    }
 
     // untracked 新文件（diffBase 中不存在的文件）
     const untrackedRaw = gitQuiet(worktreePath, `ls-files --others --exclude-standard`);
@@ -102,7 +110,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false } = {}) {
       ? untrackedRaw.split('\n').filter(Boolean).filter(f => !f.startsWith('.sillyspec/') && f !== 'meta.json')
       : [];
 
-    changedFiles = [...new Set([...trackedFiles, ...untrackedFiles])];
+    changedFiles = [...new Set([...statusFiles, ...untrackedFiles])];
   } catch (e) {
     result.errors.push(`获取变更文件列表失败: ${e.message}`);
     return result;
@@ -216,8 +224,11 @@ export function applyWorktree(changeName, { cwd, checkOnly = false } = {}) {
 
     // 分 tracked 变更和 untracked 新文件生成 patch
     const trackedFiles = patchFiles.filter(f => {
-      // untracked 文件在 baseHash 的 tree 中不存在
-      return gitQuiet(worktreePath, `cat-file -e ${diffBase}:${f}`) !== null;
+      // 文件在 diffBase 的 tree 中存在 → tracked（包括 rename 目标可能的情况）
+      if (gitQuiet(worktreePath, `cat-file -e ${diffBase}:${f}`) !== null) return true;
+      // 文件在工作区 index 中已存在（比如被 git mv 处理过）→ 也视为 tracked
+      if (gitQuiet(worktreePath, `ls-files --error-unmatch ${f}`) !== null) return true;
+      return false;
     });
     const untrackedPatchFiles = patchFiles.filter(f => !trackedFiles.includes(f));
 
