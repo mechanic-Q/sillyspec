@@ -300,6 +300,9 @@ function buildWavePrompt(wave, waveIndex, changeDir, worktreePath) {
 \`${worktreePath}\`
 
 不要在主工作区修改源码文件。所有代码变更只在 worktree 中进行。
+
+### 注意
+蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 .sillyspec/changes/<change>/ 下，它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下。
 子代理的 cwd 参数设为 \`${worktreePath}\`。
 `
     : ''
