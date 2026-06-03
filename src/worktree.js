@@ -274,6 +274,8 @@ export class WorktreeManager {
    */
   _overlayBaseline(mainCwd, worktreePath) {
     const files = [];
+    const errors = [];
+
     try {
       // staged 变更
       const staged = gitQuiet(mainCwd, 'diff --cached --name-only') || '';
@@ -287,7 +289,7 @@ export class WorktreeManager {
             rmSync(patchFile, { force: true });
           }
         } catch (e) {
-          console.warn('⚠️ baseline staged overlay 部分失败:', e.message);
+          errors.push(`staged: ${e.message}`);
         }
         files.push(...staged.split('\n').filter(Boolean));
       }
@@ -304,7 +306,7 @@ export class WorktreeManager {
             rmSync(patchFile, { force: true });
           }
         } catch (e) {
-          console.warn('⚠️ baseline unstaged overlay 部分失败:', e.message);
+          errors.push(`unstaged: ${e.message}`);
         }
         files.push(...unstaged.split('\n').filter(Boolean));
       }
@@ -326,8 +328,14 @@ export class WorktreeManager {
         console.log(`📁 baseline overlay: ${files.length} 个未提交文件已同步到 worktree`);
       }
     } catch (e) {
-      console.warn('⚠️ baseline overlay 失败:', e.message);
+      errors.push(`unexpected: ${e.message}`);
     }
+
+    // 有 pending 文件但 overlay 部分失败 → fail-fast
+    if (errors.length > 0) {
+      throw new Error(`baseline overlay 失败 (${errors.length} 个错误): ${errors.join('; ')}`);
+    }
+
     return [...new Set(files)];
   }
 }
