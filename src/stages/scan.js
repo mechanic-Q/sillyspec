@@ -67,7 +67,8 @@ export const definition = {
     },
     {
       name: '构建环境探测',
-      prompt: `对扫描列表中的**每个项目**，分别探测构建环境和依赖。
+      perProject: true,
+      prompt: `探测当前项目的构建环境和依赖。
 
 ### 操作
 对扫描列表中的每个项目重复以下操作：
@@ -83,7 +84,8 @@ export const definition = {
     },
     {
       name: '断点续扫检测',
-      prompt: `对扫描列表中的**每个项目**，分别检测已有扫描文档，只生成缺失的。
+      perProject: true,
+      prompt: `检测当前项目已有扫描文档，列出缺失的。
 
 ### 操作
 对扫描列表中的每个项目分别执行：
@@ -98,7 +100,8 @@ export const definition = {
     },
     {
       name: '深度扫描 — 7 份文档（子代理并行）',
-      prompt: `对扫描列表中的**每个项目**，按照 \`.sillyspec/workflows/scan-docs.yaml\` 中定义的角色和检查规则，使用子代理并行生成 7 份扫描文档。
+      perProject: true,
+      prompt: `按照 \`.sillyspec/workflows/scan-docs.yaml\` 中定义的角色和检查规则，使用子代理并行生成当前项目的 7 份扫描文档。
 
 **你必须使用子代理执行，不要自己写文档。**
 **对扫描列表中的每个项目分别执行以下流程。**
@@ -175,7 +178,8 @@ local.yaml 生成结果（已存在/已生成）`,
     },
     {
       name: '生成模块映射',
-      prompt: `对扫描列表中的**每个项目**，分别生成模块索引文件 \`_module-map.yaml\`。
+      perProject: true,
+      prompt: `生成当前项目的模块索引文件 \`_module-map.yaml\`。
 
 ### ⚠️ 重要：这个文件是唯一的结构化索引源
 所有结构化事实（paths/tags/entrypoints/depends_on/used_by）只维护在这个文件里。
@@ -292,7 +296,8 @@ _module-map.yaml 生成结果（已存在/已生成/模块列表）`,
     },
     {
       name: '生成模块卡片文档',
-      prompt: `对扫描列表中的**每个项目**，根据各自的 \`_module-map.yaml\` 生成模块卡片文档。
+      perProject: true,
+      prompt: `根据当前项目的 \`_module-map.yaml\` 生成模块卡片文档。
 
 ### ⚠️ 重要：模块卡片只负责人类语义说明
 结构化索引（paths/tags/entrypoints/depends_on/used_by）已经在 _module-map.yaml 里维护。
@@ -369,7 +374,8 @@ module_id: <module-id>
     },
     {
       name: '生成业务流程和术语表（可选）',
-      prompt: `根据模块依赖关系和源码，生成跨模块业务流程文档和术语表。
+      perProject: true,
+      prompt: `根据当前项目的模块依赖关系和源码，生成跨模块业务流程文档和术语表。
 
 ⚠️ 这一步是可选的。如果项目模块简单、流程不明显，可以跳过。
 
@@ -435,7 +441,8 @@ step1 → step2 → step3
     },
     {
       name: '自检和提交',
-      prompt: `对扫描列表中的**每个项目**，分别验证扫描完整性，清理并提交。
+      perProject: true,
+      prompt: `验证当前项目的扫描完整性，清理并提交。
 
 ### 操作
 对扫描列表中的每个项目分别执行：

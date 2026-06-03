@@ -584,6 +584,88 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     }
   }
 
+  // scan 阶段 step 2 "构建扫描项目列表" 完成后，按项目展开 perProject 步骤
+  if (stageName === 'scan' && steps[currentIdx]?.name === '构建扫描项目列表') {
+    // 解析项目列表：从 step 2 输出提取，或回退读取 projects/*.yaml
+    let projectNames = []
+    if (outputText) {
+      // 匹配 "1. project-name" 格式
+      const matches = outputText.match(/^\s*\d+\.\s+(\S+)/gm)
+      if (matches) {
+        projectNames = matches.map(m => m.replace(/^\s*\d+\.\s+/, '').replace(/[—\-:].*$/, '').trim())
+      }
+    }
+    if (projectNames.length === 0) {
+      // 回退：读取所有已注册项目
+      console.warn('⚠️ 未能从 step 2 输出解析项目列表，回退扫描所有注册项目')
+      const projectsDir = join(cwd, '.sillyspec', 'projects')
+      if (existsSync(projectsDir)) {
+        projectNames = readdirSync(projectsDir)
+          .filter(f => f.endsWith('.yaml'))
+          .map(f => f.replace(/\.yaml$/, ''))
+      }
+    }
+    if (projectNames.length === 0) {
+      projectNames = ['sillyspec'] // 最终兜底
+    }
+
+    // 保存到 runtime 供后续使用 + 防重复展开
+    const scanStatePath = join(cwd, '.sillyspec', '.runtime', 'scan-projects.json')
+    mkdirSync(join(cwd, '.sillyspec', '.runtime'), { recursive: true })
+    let scanState = { projects: projectNames, expanded: false }
+    if (existsSync(scanStatePath)) {
+      try { scanState = JSON.parse(readFileSync(scanStatePath, 'utf8')) } catch {}
+    }
+
+    // 收集当前步骤之后所有 perProject 步骤
+    const stageDef = stageRegistry[stageName]
+    const allSteps = stageDef?.steps || []
+    const perProjectSteps = allSteps.filter(s => s.perProject)
+
+    // 防重复展开：runtime 标记 或 steps 已含项目标识
+    const alreadyExpanded = scanState.expanded || steps.some(s => s.name?.match(/\[.+\]\s*$/))
+    if (!alreadyExpanded && perProjectSteps.length > 0) {
+      // 找到当前步骤（step 2）在动态 steps 中的位置
+      const insertBase = currentIdx + 1
+      let insertPos = insertBase
+      for (const pName of projectNames) {
+        // 读取项目配置获取 projectRoot
+        const projYaml = join(cwd, '.sillyspec', 'projects', `${pName}.yaml`)
+        let projectRoot = '.'
+        if (existsSync(projYaml)) {
+          const yamlContent = readFileSync(projYaml, 'utf8')
+          const pathMatch = yamlContent.match(/^path:\s*(.+)/m)
+          if (pathMatch) projectRoot = pathMatch[1].trim()
+        }
+        const docOutputDir = `.sillyspec/docs/${pName}`
+        const contextPrefix = `\n---\n## 当前项目\n- **项目名**: ${pName}\n- **项目路径**: ${projectRoot}\n- **文档输出**: ${docOutputDir}\n\n⚠️ 本步骤只处理上面这个项目，不要处理其他项目。\n---\n\n`
+
+        for (const ppStep of perProjectSteps) {
+          steps.splice(insertPos, 0, {
+            name: `${ppStep.name} [${pName}]`,
+            project: pName,
+            status: 'pending',
+            prompt: contextPrefix + ppStep.prompt,
+            outputHint: ppStep.outputHint,
+            optional: ppStep.optional
+          })
+          insertPos++
+        }
+      }
+      // 移除原始的 perProject 步骤（未展开的版本）
+      for (let i = steps.length - 1; i >= 0; i--) {
+        if (steps[i].perProject && !steps[i].name?.includes('[')) {
+          steps.splice(i, 1)
+        }
+      }
+      console.log(`  📝 已按项目展开 ${perProjectSteps.length} 个步骤 × ${projectNames.length} 个项目 = ${perProjectSteps.length * projectNames.length} 个项目步骤`)
+      console.log(`  📁 扫描项目：${projectNames.join(', ')}`)
+      // 标记已展开，防止 resume 重复插入
+      scanState.expanded = true
+      writeFileSync(scanStatePath, JSON.stringify(scanState))
+    }
+  }
+
   const nextPendingIdx = steps.findIndex(s => s.status === 'pending')
 
   if (nextPendingIdx === -1) {
@@ -688,21 +770,33 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
   const defSteps = await getStageSteps(stageName, cwd, progress)
   console.log(`✅ Step ${currentIdx + 1}/${steps.length} 完成：${steps[currentIdx].name}\n`)
 
-  // Workflow post_check：scan step 5 完成后自动检查产物
+  // Workflow post_check：scan 深度扫描完成后自动检查产物
   if (stageName === 'scan' && steps[currentIdx]?.name?.includes('深度扫描')) {
     try {
       const { loadWorkflow, runPostCheck, formatCheckReport, generateRetryPrompt } = await import('./workflow.js')
       const wf = loadWorkflow(cwd, 'scan-docs')
       if (wf) {
-        // 获取所有已注册项目
-        const projectsDir = join(cwd, '.sillyspec', 'projects')
-        const projectFiles = existsSync(projectsDir)
-          ? readdirSync(projectsDir).filter(f => f.endsWith('.yaml'))
-          : []
-        const projectNames = projectFiles.map(f => f.replace(/\.yaml$/, ''))
+        // 确定当前项目：优先从 step metadata 读取，回退从 display name 提取
+        const currentProjectName = steps[currentIdx].project
+          || (steps[currentIdx].name.match(/\[([^\]]+)\]\s*$/) || [])[1]
+          || null
+
+        // 确定要检查的项目列表
+        let projectsToCheck = []
+        if (currentProjectName) {
+          // 按项目展开模式：只检查当前项目
+          projectsToCheck = [currentProjectName]
+        } else {
+          // 兼容旧模式（未展开）：检查所有项目
+          const projectsDir = join(cwd, '.sillyspec', 'projects')
+          const projectFiles = existsSync(projectsDir)
+            ? readdirSync(projectsDir).filter(f => f.endsWith('.yaml'))
+            : []
+          projectsToCheck = projectFiles.map(f => f.replace(/\.yaml$/, ''))
+        }
 
         let anyFailed = false
-        for (const pName of projectNames) {
+        for (const pName of projectsToCheck) {
           const result = runPostCheck(wf, cwd, pName)
           const report = formatCheckReport(result)
           console.log(report)
