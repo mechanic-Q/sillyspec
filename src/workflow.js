@@ -119,6 +119,17 @@ function checkOutput(outputDef, projectName, cwd) {
         }
         break
       }
+      case 'no_placeholder': {
+        if (existsSync(fullPath)) {
+          const content = readFileSync(fullPath, 'utf8')
+          const patterns = check.patterns || ['待补充', 'TODO', 'TBD', '未分析', '根据项目情况', '根据实际情况', '按需填写']
+          const matches = patterns.filter(p => content.includes(p))
+          results.push({ passed: matches.length === 0, check: 'no_placeholder', detail: matches.length > 0 ? `包含占位文本: ${matches.map(m => `"${m}"`).join(', ')} — ${rawPath}` : '' })
+        } else {
+          results.push({ passed: false, check: 'no_placeholder', detail: `文件不存在: ${rawPath}` })
+        }
+        break
+      }
       default:
         results.push({ passed: true, check: check.type, detail: `未知检查类型，跳过: ${check.type}` })
     }

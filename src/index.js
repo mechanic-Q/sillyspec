@@ -485,6 +485,121 @@ SillySpec platform — SillyHub 平台同步
       await pm.renameChange(dir, oldName, newName);
       break;
     }
+    case 'workflow': {
+      const wfSub = filteredArgs[1];
+      if (!wfSub || wfSub === 'help' || wfSub === '--help') {
+        console.log(`
+SillySpec workflow — 工作流管理
+
+用法:
+  sillyspec workflow check <name> [--project <project>] [--json]
+  sillyspec workflow list
+`);
+        break;
+      }
+      if (wfSub === 'list') {
+        const { listWorkflows } = await import('./workflow.js');
+        const names = listWorkflows(dir);
+        if (names.length === 0) {
+          console.log('未找到 workflow 定义（.sillyspec/workflows/*.yaml）');
+        } else {
+          console.log(`可用 workflow：`);
+          for (const name of names) {
+            const { loadWorkflow } = await import('./workflow.js');
+            const wf = loadWorkflow(dir, name);
+            const specVer = wf?.spec_version || wf?.version || '?';
+            const mode = wf?.orchestration?.mode || '?';
+            const roles = wf?.roles?.length || 0;
+            console.log(`  ${name} (spec v${specVer}, ${mode}, ${roles} roles)`);
+          }
+        }
+        break;
+      }
+      if (wfSub === 'check') {
+        const { loadWorkflow, runPostCheck, formatCheckReport, listWorkflows } = await import('./workflow.js');
+        const wfName = filteredArgs[2];
+        if (!wfName) {
+          console.error('❌ 请指定 workflow 名称，例如：sillyspec workflow check scan-docs --project sillyspec');
+          process.exit(2);
+        }
+        const wf = loadWorkflow(dir, wfName);
+        if (!wf) {
+          console.error(`❌ 未找到 workflow: ${wfName}`);
+          console.error(`可用 workflow：${listWorkflows(dir).join(', ') || '无'}`);
+          process.exit(2);
+        }
+        // spec_version 校验
+        const specVer = wf.spec_version || wf.version;
+        if (!specVer) {
+          console.error('❌ workflow YAML 缺少 spec_version 字段');
+          process.exit(2);
+        }
+        const SUPPORTED_SPECS = [1];
+        if (!SUPPORTED_SPECS.includes(specVer)) {
+          console.error(`❌ 不支持的 spec_version: ${specVer}（支持: ${SUPPORTED_SPECS.join(', ')}）`);
+          process.exit(2);
+        }
+        // 解析 --project
+        const projectIdx = filteredArgs.indexOf('--project');
+        const project = projectIdx !== -1 && filteredArgs[projectIdx + 1] ? filteredArgs[projectIdx + 1] : null;
+        // 解析 --json（已在顶层解析）
+        const isJson = json;
+        // 解析 --change
+        const changeIdx = filteredArgs.indexOf('--change');
+        const changeName = changeIdx !== -1 && filteredArgs[changeIdx + 1] ? filteredArgs[changeIdx + 1] : null;
+
+        if (!project && wfName !== 'archive-impact') {
+          console.error('❌ 请指定 --project，例如：--project sillyspec');
+          process.exit(2);
+        }
+
+        // 执行检查
+        let resolvedWf = wf;
+        const placeholders = {};
+        if (changeName) placeholders['change-name'] = changeName;
+        // 替换占位符
+        let jsonStr = JSON.stringify(resolvedWf);
+        if (changeName) jsonStr = jsonStr.replace(/<change-name>/g, changeName);
+        resolvedWf = JSON.parse(jsonStr);
+
+        const projectName = project || 'sillyspec';
+        const result = runPostCheck(resolvedWf, dir, projectName, placeholders);
+
+        if (isJson) {
+          console.log(JSON.stringify(result, null, 2));
+        } else {
+          // 带项目维度前缀的输出
+          const lines = [`\n📋 Workflow Post-Check: ${wfName} (project: ${projectName})\n`];
+          for (const r of result.roleResults) {
+            const icon = r.passed ? '✅' : '❌';
+            lines.push(`${icon} [${projectName}] ${r.roleName} (${r.roleId})`);
+            for (const f of r.failures) {
+              lines.push(`   └─ ${f}`);
+            }
+          }
+          if (result.workflowFailures.length > 0) {
+            lines.push('');
+            for (const f of result.workflowFailures) {
+              lines.push(`❌ [${projectName}] 全局: ${f}`);
+            }
+          }
+          lines.push('');
+          if (result.passed) {
+            lines.push('✅ 全部检查通过');
+          } else {
+            lines.push('❌ 存在失败项');
+          }
+          console.log(lines.join('\n'));
+        }
+
+        // exit code: 0=通过, 1=检查失败, 2=参数/YAML错误
+        process.exit(result.passed ? 0 : 1);
+      } else {
+        console.error(`❌ 未知子命令: workflow ${wfSub}`);
+        process.exit(1);
+      }
+      break;
+    }
     case 'modules': {
       const modulesSub = filteredArgs[1];
       if (!modulesSub || modulesSub === 'help' || modulesSub === '--help') {

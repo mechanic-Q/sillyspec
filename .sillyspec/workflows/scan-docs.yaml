@@ -83,6 +83,7 @@ roles:
           - type: file_exists
           - type: min_lines
             min: 10
+          - type: no_placeholder
       - path: ".sillyspec/docs/<project>/scan/CONCERNS.md"
         required: true
         checks:
