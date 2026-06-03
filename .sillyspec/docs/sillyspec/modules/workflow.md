@@ -31,12 +31,21 @@ Workflow 引擎是 SillySpec 阶段内任务的结构化执行协议层。
 
 ## 契约摘要
 
-### 加载
+### 加载 + 校验
 
 ```js
-loadWorkflow(cwd, name) → object|null
+loadWorkflow(cwd, name, validate?) → object|null
+// validate=true 时自动校验，失败返回 { _validationErrors: [...], ...wf }
+validateWorkflow(wf) → string[]
 listWorkflows(cwd) → string[]
 ```
+
+### 校验规则
+
+- `depends_on` 引用的 role id 必须存在
+- `depends_on` 不能形成循环（A→B→A）
+- `inputs.from_role` 必须存在且已声明在 `depends_on` 中
+- `inputs.output` 必须在源 role 的 outputs 中存在
 
 ### 检查
 
@@ -66,12 +75,7 @@ generateAllRolePrompts(wf, projectName, context?) → Array<{roleId, roleName, p
 | min_lines | min: number | 文件最小行数 |
 | no_empty_files | — | 文件非空 |
 | contains_sections | sections: string[] | 必须包含的 ## 章节 |
-
-### 待实现
-
-- `no_placeholder`：过滤 AI 水文（"待补充"/"TODO"/"根据项目情况"）
-- `file_count`：目录下文件数量（已实现但只在 workflow_level）
-- `no_duplicates`：内容去重
+| no_placeholder | patterns?: string[] | 过滤独立成行的 AI 水文（"待补充"/"TODO"/"TBD"等），行内引用不触发 |
 
 ## 关键逻辑
 
@@ -86,9 +90,11 @@ workflow YAML → 替换 <project>/<change-name> 占位符
 ## 注意事项
 
 - `replaceProjectPlaceholder` 用 JSON 序列化做全局替换，性能对当前规模无影响
-- `_runPostCheck` 已合并回 `runPostCheck`，不再有独立内部函数
 - `generateRetryPrompt` 只重试失败角色（`retry_scope: failed_role_only`），不重跑成功的
 - 占位符只替换 `<project>`（`runPostCheck` 自动）和 `<change-name>`（需调用方手动替换）
+- `depends_on` 校验是两层循环检测，不做完整 DAG 拓扑排序
+- `no_placeholder` 只匹配独立成行的占位文本，避免误伤文档中行内引用的 TODO/FIXME
+- `inputs` 支持两种格式：mapping（推荐，含 from_role）和数组（兼容旧版）
 
 ## 人工备注
 

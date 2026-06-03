@@ -528,6 +528,14 @@ SillySpec workflow — 工作流管理
           console.error(`可用 workflow：${listWorkflows(dir).join(', ') || '无'}`);
           process.exit(2);
         }
+        // depends_on 校验
+        if (wf._validationErrors && wf._validationErrors.length > 0) {
+          console.error('❌ workflow YAML 校验失败：');
+          for (const err of wf._validationErrors) {
+            console.error(`   ${err}`);
+          }
+          process.exit(2);
+        }
         // spec_version 校验
         const specVer = wf.spec_version || wf.version;
         if (!specVer) {

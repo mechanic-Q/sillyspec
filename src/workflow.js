@@ -21,7 +21,7 @@ import jsYaml from 'js-yaml'
  * @param {string} name - workflow 名称（如 'scan-docs'）
  * @returns {object|null} workflow 定义，或 null
  */
-export function loadWorkflow(cwd, name) {
+export function loadWorkflow(cwd, name, validate = true) {
   const wfDir = join(cwd, '.sillyspec', 'workflows')
   if (!existsSync(wfDir)) return null
 
@@ -30,10 +30,85 @@ export function loadWorkflow(cwd, name) {
     const f = join(wfDir, `${name}${ext}`)
     if (existsSync(f)) {
       const raw = readFileSync(f, 'utf8')
-      return jsYaml.load(raw)
+      const wf = jsYaml.load(raw)
+      if (validate) {
+        const errors = validateWorkflow(wf)
+        if (errors.length > 0) return { _validationErrors: errors, ...wf }
+      }
+      return wf
     }
   }
   return null
+}
+
+/**
+ * 校验 workflow YAML 结构
+ * @param {object} wf - workflow 定义
+ * @returns {string[]} 错误列表，空数组表示通过
+ */
+export function validateWorkflow(wf) {
+  const errors = []
+  const roles = wf.roles || []
+  const roleIds = new Set(roles.map(r => r.id))
+
+  for (const role of roles) {
+    if (!role.id) {
+      errors.push(`role 缺少 id 字段`)
+      continue
+    }
+    // depends_on 校验
+    const deps = role.depends_on || []
+    for (const depId of deps) {
+      if (!roleIds.has(depId)) {
+        errors.push(`role "${role.id}" 的 depends_on 引用了不存在的 role "${depId}"`)
+      }
+    }
+    // depends_on 循环检测（简单两层：A→B→A）
+    for (const depId of deps) {
+      const depRole = roles.find(r => r.id === depId)
+      if (depRole && (depRole.depends_on || []).includes(role.id)) {
+        errors.push(`循环依赖："${role.id}" ↔ "${depId}"`)
+      }
+    }
+    // from_role 校验
+    const inputs = role.inputs || {}
+    if (!Array.isArray(inputs)) {
+      // inputs is a mapping
+      if (inputs.from_role) {
+        if (!roleIds.has(inputs.from_role)) {
+          errors.push(`role "${role.id}" 的 inputs.from_role 引用了不存在的 role "${inputs.from_role}"`)
+        }
+        if (inputs.output) {
+          const sourceRole = roles.find(r => r.id === inputs.from_role)
+          if (sourceRole) {
+            const outputExists = (sourceRole.outputs || []).some(o => {
+              const outputName = o.name || o.path?.split('/').pop()?.replace(/\.md$/, '') || ''
+              return outputName === inputs.output
+            })
+            if (!outputExists) {
+              errors.push(`role "${role.id}" 的 inputs.from_role "${inputs.from_role}" 没有名为 "${inputs.output}" 的 output`)
+            }
+          }
+        }
+        if (!deps.includes(inputs.from_role)) {
+          errors.push(`role "${role.id}" 的 inputs.from_role "${inputs.from_role}" 未在 depends_on 中声明`)
+        }
+      }
+    } else {
+      // inputs is an array (legacy format)
+      for (const input of inputs) {
+        if (input.from_role) {
+          if (!roleIds.has(input.from_role)) {
+            errors.push(`role "${role.id}" 的 inputs.from_role 引用了不存在的 role "${input.from_role}"`)
+          }
+          if (!deps.includes(input.from_role)) {
+            errors.push(`role "${role.id}" 的 inputs.from_role "${input.from_role}" 未在 depends_on 中声明`)
+          }
+        }
+      }
+    }
+  }
+  return errors
 }
 
 /**
@@ -123,8 +198,12 @@ function checkOutput(outputDef, projectName, cwd) {
         if (existsSync(fullPath)) {
           const content = readFileSync(fullPath, 'utf8')
           const patterns = check.patterns || ['待补充', 'TODO', 'TBD', '未分析', '根据项目情况', '根据实际情况', '按需填写']
-          const matches = patterns.filter(p => content.includes(p))
-          results.push({ passed: matches.length === 0, check: 'no_placeholder', detail: matches.length > 0 ? `包含占位文本: ${matches.map(m => `"${m}"`).join(', ')} — ${rawPath}` : '' })
+          // 只匹配独立成行的占位文本，不匹配行内引用
+          const lineMatches = patterns.filter(p => {
+            const regex = new RegExp(`^\s*[-*]?\s*${p}\s*$`, 'm')
+            return regex.test(content)
+          })
+          results.push({ passed: lineMatches.length === 0, check: 'no_placeholder', detail: lineMatches.length > 0 ? `包含占位文本: ${lineMatches.map(m => `"${m}"`).join(', ')} — ${rawPath}` : '' })
         } else {
           results.push({ passed: false, check: 'no_placeholder', detail: `文件不存在: ${rawPath}` })
         }
@@ -331,19 +410,50 @@ export function generateRolePrompt(wf, roleId, projectName, context = {}) {
     lines.push(`任务：${role.task}`)
   }
 
+  // 依赖角色的输出（depends_on + from_role）
+  const deps = role.depends_on || []
+  if (deps.length > 0) {
+    lines.push('')
+    lines.push('前置依赖（已完成角色的输出）：')
+    const inputs = role.inputs || {}
+    for (const depId of deps) {
+      const depRole = (resolved.roles || []).find(r => r.id === depId)
+      if (!depRole) continue
+      if (inputs.from_role === depId) {
+        lines.push(`- ${depRole.name}（${depId}）：${inputs.output_description || ''}`)
+        if (inputs.output) {
+          const depOutput = (depRole.outputs || []).find(o => {
+            const outputName = o.name || o.path?.split('/').pop()?.replace(/\.md$/, '') || ''
+            return outputName === inputs.output
+          })
+          if (depOutput) {
+            lines.push(`  输出文件：${depOutput.path}`)
+          }
+        }
+      } else {
+        lines.push(`- ${depRole.name}（${depId}）`)
+        for (const o of (depRole.outputs || [])) {
+          lines.push(`  输出：${o.path}`)
+        }
+      }
+    }
+  }
+
   // 输入提示
   const inputs = role.inputs || {}
-  if (inputs.paths && inputs.paths.length > 0) {
+  const inputPaths = inputs.paths || []
+  const inputHints = inputs.hints || {}
+  if (inputPaths.length > 0) {
     lines.push('')
     lines.push('搜索范围：')
-    for (const p of inputs.paths) {
+    for (const p of inputPaths) {
       lines.push(`- ${p}`)
     }
   }
-  if (inputs.hints && inputs.hints.grep_patterns && inputs.hints.grep_patterns.length > 0) {
+  if (inputHints.grep_patterns && inputHints.grep_patterns.length > 0) {
     lines.push('')
     lines.push('搜索关键词：')
-    lines.push(`- ${inputs.hints.grep_patterns.join(', ')}`)
+    lines.push(`- ${inputHints.grep_patterns.join(', ')}`)
   }
 
   // 额外上下文
