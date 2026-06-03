@@ -94,6 +94,7 @@ async function main() {
 
   // 解析全局选项
   let json = false;
+  let saveWorkflowRunFlag = false;
   let targetDir = process.cwd();
   let tool = null;
   let interactive = false;
@@ -102,6 +103,8 @@ async function main() {
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--json') {
       json = true;
+    } else if (args[i] === '--save') {
+      saveWorkflowRunFlag = true;
     } else if (args[i] === '--dir' && args[i + 1]) {
       targetDir = resolve(args[i + 1]);
       i++;
@@ -516,7 +519,7 @@ SillySpec workflow — 工作流管理
         break;
       }
       if (wfSub === 'check') {
-        const { loadWorkflow, runPostCheck, listWorkflows } = await import('./workflow.js');
+        const { loadWorkflow, runPostCheck, listWorkflows, saveWorkflowRun } = await import('./workflow.js');
         const wfName = filteredArgs[2];
         if (!wfName) {
           console.error('❌ 请指定 workflow 名称，例如：sillyspec workflow check scan-docs --project sillyspec');
@@ -603,6 +606,12 @@ SillySpec workflow — 工作流管理
         }
 
         // exit code: 0=通过, 1=检查失败, 2=参数/YAML错误
+        if (saveWorkflowRunFlag) {
+          const saved = saveWorkflowRun(result, { cwd: dir, source: 'cli' });
+          if (saved) {
+            if (!isJson) console.log(`\n📁 结果已归档：${saved}`);
+          }
+        }
         process.exit(result.status === 'pass' ? 0 : 1);
       } else {
         console.error(`❌ 未知子命令: workflow ${wfSub}`);

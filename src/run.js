@@ -773,7 +773,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
   // Workflow post_check：scan 深度扫描完成后自动检查产物
   if (stageName === 'scan' && steps[currentIdx]?.name?.includes('深度扫描')) {
     try {
-      const { loadWorkflow, runPostCheck, formatCheckReport, generateRetryPrompt } = await import('./workflow.js')
+      const { loadWorkflow, runPostCheck, formatCheckReport, saveWorkflowRun } = await import('./workflow.js')
       const wf = loadWorkflow(cwd, 'scan-docs')
       if (wf) {
         // 确定当前项目：优先从 step metadata 读取，回退从 display name 提取
@@ -808,6 +808,8 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
               console.log(rp.prompt)
             }
           }
+          const saved = saveWorkflowRun(result, { cwd, source: 'run.js', stage: 'verify', step: steps[currentIdx]?.name })
+          if (saved) console.log(`📁 结果已归档：${saved}`)
         }
         if (anyFailed) {
           console.log(`\n⚠️ 存在检查失败项，请按上面的重试提示修复后再继续。`)
@@ -821,7 +823,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
   // Workflow post_check：archive extract-module-impact 完成后检查产物
   if (stageName === 'archive' && steps[currentIdx]?.name?.includes('extract-module-impact')) {
     try {
-      const { loadWorkflow, runPostCheck, formatCheckReport } = await import('./workflow.js')
+      const { loadWorkflow, runPostCheck, formatCheckReport, saveWorkflowRun } = await import('./workflow.js')
       const wf = loadWorkflow(cwd, 'archive-impact')
       if (wf && changeName) {
         const raw = JSON.stringify(wf)
@@ -836,6 +838,8 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
             console.log(`   └─ ${f}`)
           }
         }
+        const saved = saveWorkflowRun(result, { cwd, source: 'run.js', stage: 'archive', step: steps[currentIdx]?.name })
+        if (saved) console.log(`📁 结果已归档：${saved}`)
       }
     } catch (e) {
       console.warn(`⚠️ workflow 检查跳过：${e.message}`)

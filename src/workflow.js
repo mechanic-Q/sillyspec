@@ -9,7 +9,7 @@
  *   - 根据 role 定义生成 role prompts（Level 2）
  */
 
-import { readFileSync, existsSync, readdirSync } from 'fs'
+import { readFileSync, existsSync, readdirSync, writeFileSync, mkdirSync } from 'fs'
 import { join, resolve, basename } from 'path'
 import jsYaml from 'js-yaml'
 
@@ -614,4 +614,57 @@ export function generateAllRolePrompts(wf, projectName, context = {}) {
     roleName: role.name || role.id,
     prompt: generateRolePrompt(resolved, role.id, projectName, context)
   }))
+}
+
+// ─── Workflow Run 归档 ───
+
+
+/**
+ * 将 workflow check 结果归档到 .sillyspec/.runtime/workflow-runs/
+ * @param {object} result - runPostCheck 返回的结构化结果
+ * @param {object} options
+ * @param {string} options.cwd - 项目根目录
+ * @param {string} [options.source] - 调用来源（'run.js' / 'cli'）
+ * @param {string} [options.stage] - 阶段名（scan/archive）
+ * @param {string} [options.step] - 步骤名
+ * @returns {string|null} 保存路径，失败返回 null
+ */
+export function saveWorkflowRun(result, options = {}) {
+  const { cwd = '.', source = 'unknown', stage, step } = options
+  const runDir = join(cwd, '.sillyspec', '.runtime', 'workflow-runs')
+  try {
+    mkdirSync(runDir, { recursive: true })
+  } catch (e) {
+    console.warn('⚠️ 无法创建 workflow-runs 目录:', e.message)
+    return null
+  }
+
+  const now = new Date()
+  const ts = now.toISOString().replace(/[-:T]/g, '').slice(0, 14)
+  const filename = `${ts}-${result.workflow || 'unknown'}-${result.project || 'default'}-${result.status}.json`
+  const filepath = join(runDir, filename)
+
+  const record = {
+    run_id: filename.replace('.json', ''),
+    created_at: now.toISOString(),
+    source,
+    ...(stage ? { stage } : {}),
+    ...(step ? { step } : {}),
+    workflow: result.workflow,
+    project: result.project,
+    status: result.status,
+    spec_version: result.spec_version,
+    roles: result.roles,
+    workflow_checks: result.workflow_checks,
+    failures: result.failures,
+    retry_prompts: result.retry_prompts
+  }
+
+  try {
+    writeFileSync(filepath, JSON.stringify(record, null, 2), 'utf8')
+    return filepath
+  } catch (e) {
+    console.warn('⚠️ 保存 workflow run 失败:', e.message)
+    return null
+  }
 }
