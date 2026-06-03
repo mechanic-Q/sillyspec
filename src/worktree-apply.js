@@ -16,6 +16,7 @@ import { execSync } from 'child_process';
 import { existsSync, unlinkSync, writeFileSync, mkdtempSync, rmSync } from 'fs';
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
+import { createHash } from 'crypto';
 import { WorktreeManager } from './worktree.js';
 import { parseFileChangeList } from './change-list.js';
 
@@ -77,7 +78,9 @@ export function applyWorktree(changeName, { cwd, checkOnly = false } = {}) {
     return result;
   }
 
-  const { worktreePath, baseHash } = meta;
+  const { worktreePath, baseHash, baselineCommit } = meta;
+  // diff 起始点：有 baseline checkpoint 用它（只合子代理改动），否则 fallback 到 baseHash
+  const diffBase = baselineCommit || baseHash;
 
   if (!existsSync(worktreePath)) {
     result.errors.push(`worktree 目录不存在: ${worktreePath}`);
@@ -90,10 +93,10 @@ export function applyWorktree(changeName, { cwd, checkOnly = false } = {}) {
   let changedFiles;
   try {
     // tracked 文件的变更（modified/deleted）
-    const trackedRaw = git(worktreePath, `diff --name-only ${baseHash}`);
+    const trackedRaw = git(worktreePath, `diff --name-only ${diffBase}`);
     const trackedFiles = trackedRaw ? trackedRaw.split('\n').filter(Boolean) : [];
 
-    // untracked 新文件（baseHash 中不存在的文件）
+    // untracked 新文件（diffBase 中不存在的文件）
     const untrackedRaw = gitQuiet(worktreePath, `ls-files --others --exclude-standard`);
     const untrackedFiles = untrackedRaw
       ? untrackedRaw.split('\n').filter(Boolean).filter(f => !f.startsWith('.sillyspec/') && f !== 'meta.json')
@@ -131,6 +134,24 @@ export function applyWorktree(changeName, { cwd, checkOnly = false } = {}) {
     if (result.extraFiles.length > 0) {
       result.errors.push(
         `文件清单校验失败：以下变更文件不在 design.md 清单中：\n  ${result.extraFiles.join('\n  ')}`
+      );
+      return result;
+    }
+  }
+
+  // --- 4.5 校验：主工作区 baseline 是否变化（防 execute 期间主工作区被修改）---
+  if (meta.baselineHash) {
+    const staged = gitQuiet(projectRoot, 'diff --cached') || '';
+    const unstaged = gitQuiet(projectRoot, 'diff') || '';
+    const untracked = gitQuiet(projectRoot, 'ls-files --others --exclude-standard') || '';
+    const raw = `staged:${staged}\nunstaged:${unstaged}\nuntracked:${untracked}`;
+    const currentHash = createHash('sha256').update(raw).digest('hex').slice(0, 16);
+    if (currentHash !== meta.baselineHash) {
+      result.errors.push(
+        `主工作区 baseline 已变化（execute 前后不一致），不能直接 apply task.patch。\n` +
+        `建议：重新创建 worktree 或手动检查冲突。\n` +
+        `execute 前 baseline: ${meta.baselineHash}\n` +
+        `当前 baseline: ${currentHash}`
       );
       return result;
     }
@@ -196,7 +217,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false } = {}) {
     // 分 tracked 变更和 untracked 新文件生成 patch
     const trackedFiles = patchFiles.filter(f => {
       // untracked 文件在 baseHash 的 tree 中不存在
-      return gitQuiet(worktreePath, `cat-file -e ${baseHash}:${f}`) !== null;
+      return gitQuiet(worktreePath, `cat-file -e ${diffBase}:${f}`) !== null;
     });
     const untrackedPatchFiles = patchFiles.filter(f => !trackedFiles.includes(f));
 
@@ -204,7 +225,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false } = {}) {
     if (trackedFiles.length > 0) {
       const trackedArgs = trackedFiles.map(f => `-- ${f}`).join(' ');
       patchContent += execSync(
-        `git diff --binary ${baseHash} ${trackedArgs}`,
+        `git diff --binary ${diffBase} ${trackedArgs}`,
         { cwd: worktreePath, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
       );
     }

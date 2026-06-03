@@ -11,6 +11,7 @@
 import { execSync } from 'child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync } from 'fs';
 import { join, resolve, dirname } from 'path';
+import { createHash } from 'crypto';
 
 const WORKTREES_REL = '.sillyspec/.runtime/worktrees';
 const BRANCH_PREFIX = 'sillyspec/';
@@ -30,6 +31,16 @@ function gitQuiet(cwd, args) {
 
 function parseJSON(raw) {
   try { return JSON.parse(raw); } catch { return null; }
+}
+
+function computeBaselineHash(cwd) {
+  const staged = gitQuiet(cwd, 'diff --cached') || '';
+  const unstaged = gitQuiet(cwd, 'diff') || '';
+  const untracked = gitQuiet(cwd, 'ls-files --others --exclude-standard') || '';
+  const raw = `staged:${staged}
+unstaged:${unstaged}
+untracked:${untracked}`;
+  return createHash('sha256').update(raw).digest('hex').slice(0, 16);
 }
 
 function validateChangeName(changeName) {
@@ -176,7 +187,15 @@ export class WorktreeManager {
     }
 
     // 5.6 Dirty baseline overlay：将主工作区未提交变更同步到 worktree
-    const baselineFiles = this._overlayBaseline(this.cwd, worktreePath);
+    const baselineResult = this._overlayBaseline(this.cwd, worktreePath);
+    const baselineFiles = baselineResult.files;
+    const baselineHash = baselineResult.baselineHash;
+
+    // 5.7 创建 baseline checkpoint（有 dirty baseline 时才创建）
+    let baselineCommit = null;
+    if (baselineFiles.length > 0) {
+      baselineCommit = this._createBaselineCheckpoint(worktreePath, name);
+    }
 
     // 6. 写入 meta.json
     const meta = {
@@ -188,6 +207,8 @@ export class WorktreeManager {
       createdAt: new Date().toISOString(),
       worktreePath,
       baselineFiles,
+      baselineCommit,
+      baselineHash,  // 有 dirty baseline 时指向 checkpoint commit
     };
 
     const metaPath = join(worktreePath, META_FILE);
@@ -336,6 +357,45 @@ export class WorktreeManager {
       throw new Error(`baseline overlay 失败 (${errors.length} 个错误): ${errors.join('; ')}`);
     }
 
-    return [...new Set(files)];
+    const uniqueFiles = [...new Set(files)];
+
+    // 计算 baseline hash（用于 merge 前校验主工作区是否变化）
+    const baselineHash = uniqueFiles.length > 0 ? computeBaselineHash(mainCwd) : null;
+
+    return { files: uniqueFiles, baselineHash };
+  }
+
+  /**
+   * 在 worktree 内创建 baseline checkpoint commit
+   * 用于区分 "前置 dirty baseline" 和 "子代理新增改动"
+   * @param {string} worktreePath
+   * @param {string} changeName
+   * @returns {string} commit hash
+   */
+  _createBaselineCheckpoint(worktreePath, changeName) {
+    // 使用临时 git identity，避免用户未配置 user.name/user.email 导致失败
+    const env = {
+      GIT_AUTHOR_NAME: 'sillyspec',
+      GIT_AUTHOR_EMAIL: 'sillyspec@baseline',
+      GIT_COMMITTER_NAME: 'sillyspec',
+      GIT_COMMITTER_EMAIL: 'sillyspec@baseline',
+    };
+    try {
+      execSync('git add -A', { cwd: worktreePath, encoding: 'utf8', stdio: ['pipe','pipe','pipe'], env });
+      // 检查是否有实际变更（可能 overlay 后和 HEAD 完全一致）
+      const status = gitQuiet(worktreePath, 'status --porcelain');
+      if (!status) {
+        return gitQuiet(worktreePath, 'rev-parse HEAD');
+      }
+      execSync(
+        `git commit -m "sillyspec: baseline checkpoint for ${changeName}"`,
+        { cwd: worktreePath, encoding: 'utf8', stdio: ['pipe','pipe','pipe'], env }
+      );
+      const hash = git(worktreePath, 'rev-parse HEAD');
+      console.log(`📌 baseline checkpoint: ${hash}`);
+      return hash;
+    } catch (e) {
+      throw new Error(`baseline checkpoint 创建失败: ${e.message}`);
+    }
   }
 }
