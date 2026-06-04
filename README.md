@@ -2,7 +2,7 @@
   <img src="logo.jpg" width="80" />
 </p>
 
-# SillySpec v3.9 — 规范驱动开发工具包
+# SillySpec v3.16 — 规范驱动开发工具包
 
 > 融合 Superpowers + OpenSpec + GSD，从"你说要啥"到"代码能跑"的完整流程。
 > Claude Code / Cursor / Codex / OpenCode / OpenClaw 都能用。

@@ -84,7 +84,6 @@ for f in .sillyspec/projects/*.yaml; do
   stack_md="$p/.sillyspec/STACK.md"
   [ -f "$local_yaml" ] && echo "✅ local.yaml ($name)" || echo "⚠️ local.yaml ($name) — 不存在"
   if [ -f "$local_yaml" ]; then
-    grep -q 'build:' "$local_yaml" && echo "  ✅ build 命令已配置" || echo "  ⚠️ 缺少 build 命令"
     grep -q 'test:' "$local_yaml" && echo "  ✅ test 命令已配置" || echo "  ⚠️ 缺少 test 命令"
   fi
   [ -f "$stack_md" ] && echo "✅ STACK.md ($name)" || echo "⚠️ STACK.md ($name) — 不存在"
@@ -346,7 +345,7 @@ timeout 5 which docker 2>/dev/null && echo "✅ Docker 可用" || echo "ℹ️ D
 **常见问题及修复：**
 - CLI 未安装 → \`npm install -g sillyspec\`
 - 缺少 local.yaml → \`sillyspec init\` 重新生成，或手动创建
-- local.yaml 缺少 build/test → 补充对应命令
+- local.yaml 缺少 test 命令 → 补充对应命令
 - 缺少 STACK.md → \`sillyspec run scan\` 重新扫描
 - sillyspec.db 状态不一致 → \`sillyspec run <阶段> --reset\` 重置对应阶段
 - 孤儿目录 → 确认后 \`rm -rf .sillyspec/changes/<目录名>\`
