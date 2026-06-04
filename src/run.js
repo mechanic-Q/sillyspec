@@ -313,6 +313,38 @@ export async function runCommand(args, cwd) {
     scanRunId: getFlagValue('--scan-run-id'),
   }
 
+  // 跨 --done 生命周期：优先从 metadata 文件恢复 platformOpts
+  // 首次 scan 时写入，后续 --done 读取
+  const platformOptsFile = join(cwd, '.sillyspec', '.runtime', 'platform-scan.json')
+  if (isDone || isSkip) {
+    // --done/--skip 阶段：从文件恢复
+    try {
+      const { readFileSync } = await import('fs')
+      const saved = JSON.parse(readFileSync(platformOptsFile, 'utf8'))
+      if (saved.specRoot) platformOpts.specRoot = saved.specRoot
+      if (saved.runtimeRoot) platformOpts.runtimeRoot = saved.runtimeRoot
+      if (saved.workspaceId) platformOpts.workspaceId = saved.workspaceId
+      if (saved.scanRunId) platformOpts.scanRunId = saved.scanRunId
+    } catch {
+      // 文件不存在，说明不是平台模式，跳过
+    }
+  } else if (platformOpts.specRoot || platformOpts.runtimeRoot) {
+    // 首次 scan：持久化 platformOpts
+    try {
+      const { mkdirSync, writeFileSync } = await import('fs')
+      mkdirSync(join(cwd, '.sillyspec', '.runtime'), { recursive: true })
+      writeFileSync(platformOptsFile, JSON.stringify({
+        specRoot: platformOpts.specRoot,
+        runtimeRoot: platformOpts.runtimeRoot,
+        workspaceId: platformOpts.workspaceId,
+        scanRunId: platformOpts.scanRunId,
+        savedAt: new Date().toISOString(),
+      }, null, 2) + '\n')
+    } catch {
+      // 静默失败，不影响主流程
+    }
+  }
+
   // 解析 --output
   let outputText = null
   const outputIdx = flags.indexOf('--output')
@@ -332,6 +364,26 @@ export async function runCommand(args, cwd) {
   const changeIdx = flags.indexOf('--change')
   if (changeIdx !== -1 && flags[changeIdx + 1]) {
     changeName = flags[changeIdx + 1]
+  }
+
+  // 未知参数 fail-fast
+  const knownFlags = new Set([
+    '--done', '--skip', '--status', '--reset', '--confirm', '--skip-approval',
+    '--output', '--input', '--change',
+    '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
+    '--json', '--dir', '--help',
+  ])
+  for (let i = 0; i < flags.length; i++) {
+    const f = flags[i]
+    if (f.startsWith('--')) {
+      if (!knownFlags.has(f)) {
+        console.error(`❌ 未知参数: ${f}`)
+        console.error(`已知参数: ${[...knownFlags].sort().join(', ')}`)
+        process.exit(1)
+      }
+      // 跳过 value 参数
+      i++
+    }
   }
 
   const isAuxiliary = auxiliaryStages.includes(stageName)
@@ -409,7 +461,7 @@ export async function runCommand(args, cwd) {
 
   // --done
   if (isDone) {
-    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange })
+    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, platformOpts })
   }
 
   // 默认：输出当前步骤
@@ -575,7 +627,7 @@ function validateFileLocations(cwd, stageName, progress, changeName) {
 }
 
 async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
-  const { printNext = true, confirm = false, changeName } = options
+  const { printNext = true, confirm = false, changeName, platformOpts = {} } = options
   const stageData = progress.stages[stageName]
   if (!stageData || !stageData.steps) {
     console.error(`❌ 阶段 ${stageName} 未初始化`)
@@ -596,10 +648,13 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     const MAX_OUTPUT = 200
     if (outputText.length > MAX_OUTPUT) {
       steps[currentIdx].output = outputText.slice(0, MAX_OUTPUT) + '…'
-      const artifactsDir = join(cwd, '.sillyspec', '.runtime', 'artifacts')
-      mkdirSync(artifactsDir, { recursive: true })
+      // 平台模式：artifact 写入 runtime-root，否则写 .sillyspec/.runtime/artifacts
+      const artifactBase = platformOpts?.runtimeRoot
+        ? join(platformOpts.runtimeRoot, 'scan-runs', platformOpts.scanRunId || 'unknown')
+        : join(cwd, '.sillyspec', '.runtime', 'artifacts')
+      mkdirSync(artifactBase, { recursive: true })
       const ts = new Date().toISOString().slice(0,19).replace(/[-T:]/g, '')
-      writeFileSync(join(artifactsDir, `${changeName || 'unknown'}-${stageName}-step${currentIdx + 1}-${ts}.txt`), outputText)
+      writeFileSync(join(artifactBase, `${changeName || 'unknown'}-${stageName}-step${currentIdx + 1}-${ts}.txt`), outputText)
     } else {
       steps[currentIdx].output = outputText
     }
@@ -756,6 +811,10 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         if (!sourceCommit) {
           console.log(`⚠️  source_commit 无法获取（可能非 git 目录），已设为 null`)
         }
+        // 清理平台参数临时文件
+        const { unlinkSync } = await import('fs')
+        const platformOptsFile = join(cwd, '.sillyspec', '.runtime', 'platform-scan.json')
+        try { unlinkSync(platformOptsFile) } catch {}
       } catch (e) {
         console.warn(`⚠️  manifest.json 写入失败: ${e.message}`)
       }
@@ -1132,7 +1191,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
     process.exit(1)
   }
 
-  const result = await completeStep(pm, progress, currentStage, cwd, outputText, inputText, { printNext: false, changeName })
+  const result = await completeStep(pm, progress, currentStage, cwd, outputText, inputText, { printNext: false, changeName, platformOpts })
   if (!result) return
   progress = await pm.read(cwd, changeName)
 

@@ -32,6 +32,10 @@ SillySpec CLI — 规范驱动开发工具包
     --status                   查看阶段进度
     --reset                    重置阶段
     --change <name>            设置当前变更名
+    --spec-root <path>         平台模式：SillySpec storage root 路径
+    --runtime-root <path>       平台模式：运行时产物根路径
+    --workspace-id <id>         平台模式：workspace ID
+    --scan-run-id <id>          平台模式：scan run ID
     auto                       连续推进 brainstorm→plan→execute→verify
 
   可选阶段:
