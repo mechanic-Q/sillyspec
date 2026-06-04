@@ -222,17 +222,20 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
   if (stageName === 'scan' && (platformOpts.specRoot || platformOpts.runtimeRoot)) {
     const platformDirectives = []
     if (platformOpts.specRoot) {
+      const specSillyspec = join(platformOpts.specRoot, '.sillyspec')
       platformDirectives.push(
-        `## ⚠️ 平台模式 — 文档输出路径覆盖\n` +
-        `本次 scan 的所有正式文档必须写入以下路径（替代默认的 \.sillyspec/docs/<project>/）：\n\n` +
-        `| 类型 | 输出路径 |\n|------|----------|\n` +
-        `| scan 文档 | ${platformOpts.specRoot}/scan/ |\n` +
-        `| 模块文档 | ${platformOpts.specRoot}/modules/ |\n` +
-        `| 流程文档 | ${platformOpts.specRoot}/flows/ |\n` +
-        `| 术语表 | ${platformOpts.specRoot}/glossary.md |\n` +
-        `| manifest | ${platformOpts.specRoot}/manifest.json |\n\n` +
-        `创建目录：\`mkdir -p ${platformOpts.specRoot}/{scan,modules,flows}\`\n` +
-        `所有写入操作使用上述绝对路径，不要回退到 \.sillyspec/docs/。`
+        `## ⚠️ 平台模式 — SillySpec Storage Root 覆盖
+` +
+        `本次 scan 的 SillySpec 根目录为 \`${specSillyspec}/\`，替代默认的 \`.sillyspec/\`。\n\n` +
+        `所有路径前缀从 \`.sillyspec/\` 替换为 \`${specSillyspec}/\`：\n\n` +
+        `| 默认路径 | 平台模式路径 |\n|----------|-------------|\n` +
+        `| .sillyspec/docs/ | ${specSillyspec}/docs/ |\n` +
+        `| .sillyspec/projects/ | ${specSillyspec}/projects/ |\n` +
+        `| .sillyspec/workflows/ | ${specSillyspec}/workflows/ |\n` +
+        `| .sillyspec/knowledge/ | ${specSillyspec}/knowledge/ |\n` +
+        `| .sillyspec/local.yaml | ${specSillyspec}/local.yaml |\n\n` +
+        `创建目录：\`mkdir -p ${specSillyspec}/{docs,projects,workflows,knowledge}\`\n` +
+        `所有写入操作使用上述绝对路径，不要回退到 cwd 下的 \`.sillyspec/\`。`
       )
     }
     if (platformOpts.runtimeRoot) {
@@ -410,7 +413,7 @@ export async function runCommand(args, cwd) {
   }
 
   // 默认：输出当前步骤
-  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval)
+  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts)
 }
 
 /**
@@ -425,7 +428,7 @@ function resolveChangeNameAuto(cwd) {
   return null
 }
 
-async function runStage(pm, progress, stageName, cwd, changeName, skipApproval = false) {
+async function runStage(pm, progress, stageName, cwd, changeName, skipApproval = false, platformOpts = {}) {
   // execute 阶段启动前检查审批
   if (stageName === 'execute' && !skipApproval) {
     const approval = await checkApproval(cwd, changeName)
@@ -734,7 +737,8 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         const { mkdirSync, writeFileSync } = await import('fs')
         const { join } = await import('path')
         const { execSync } = await import('child_process')
-        mkdirSync(platformOpts.specRoot, { recursive: true })
+        const manifestDir = join(platformOpts.specRoot, '.sillyspec')
+        mkdirSync(manifestDir, { recursive: true })
         let sourceCommit = null
         try {
           sourceCommit = execSync('git rev-parse HEAD', { cwd, encoding: 'utf8', timeout: 5000 }).trim()
@@ -746,7 +750,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
           generated_at: new Date().toISOString(),
           schema_version: 1,
         }
-        const manifestPath = join(platformOpts.specRoot, 'manifest.json')
+        const manifestPath = join(manifestDir, 'manifest.json')
         writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
         console.log(`📄 manifest.json 已写入: ${manifestPath}`)
         if (!sourceCommit) {
