@@ -270,39 +270,28 @@ async function main() {
     }
     case 'worktree': {
       const { WorktreeManager } = await import('./worktree.js');
+      const { ProgressManager } = await import('./progress.js');
       const wtSubCmd = filteredArgs[1];
-      // 提取第一个非 -- 开头的位置参数作为 wtName
       const wtName = filteredArgs.slice(2).find(a => !a.startsWith('-'));
       const wm = new WorktreeManager({ cwd: dir });
+      const pm = new ProgressManager();
 
-      // isolation 写入 gate-status.json 的辅助函数
-      function _writeIsolationToGateStatus(cwd, changeName, info) {
-        const { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } = require('fs');
-        const { join } = require('path');
-        const gatePath = join(cwd, '.sillyspec', '.runtime', 'gate-status.json');
-        let gateData = {};
-        if (existsSync(gatePath)) {
-          try { gateData = JSON.parse(readFileSync(gatePath, 'utf8')); } catch {}
-        }
-        if (!gateData.isolation) gateData.isolation = {};
-
+      // isolation 写入 DB 的辅助函数
+      async function _writeIsolationToDB(cwd, changeName, info) {
         if (info.blocked) {
-          gateData.isolation[changeName] = { status: 'blocked', reason: info.reason };
+          await pm.updateChangeIsolation(cwd, changeName, {
+            status: 'blocked',
+            mode: null,
+            reason: info.reason,
+          });
         } else {
           const mode = info.mode || 'worktree';
           const statusMap = { 'worktree': 'verified', 'native-worktree': 'verified', 'in-place-fallback': 'degraded' };
-          gateData.isolation[changeName] = {
+          await pm.updateChangeIsolation(cwd, changeName, {
             status: statusMap[mode] || 'verified',
             mode,
-            path: info.worktreePath,
-            branch: info.branch,
-          };
+          });
         }
-        gateData.updatedAt = new Date().toISOString();
-        mkdirSync(join(cwd, '.sillyspec', '.runtime'), { recursive: true });
-        const tmpPath = gatePath + '.tmp';
-        writeFileSync(tmpPath, JSON.stringify(gateData, null, 2) + '\n');
-        renameSync(tmpPath, gatePath);
       }
 
       if (!wtSubCmd || wtSubCmd === 'help' || wtSubCmd === '--help' || wtSubCmd === '-h') {
@@ -340,11 +329,11 @@ SillySpec worktree — git worktree 隔离管理
               console.log(`   模式: ${info.mode}`);
             }
             // 写入 isolation 信息到 gate-status.json
-            _writeIsolationToGateStatus(dir, wtName, info);
+            await _writeIsolationToDB(dir, wtName, info);
           } catch (e) {
             console.error(`❌ ${e.message}`);
             // 写入 blocked 状态到 gate-status.json
-            _writeIsolationToGateStatus(dir, wtName, { blocked: true, reason: e.message });
+            await _writeIsolationToDB(dir, wtName, { blocked: true, reason: e.message });
             process.exit(1);
           }
           break;

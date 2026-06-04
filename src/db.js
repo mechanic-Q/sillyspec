@@ -164,5 +164,22 @@ export class DB {
     this.db.run('CREATE INDEX IF NOT EXISTS idx_changes_status ON changes(status)');
     this.db.run('CREATE INDEX IF NOT EXISTS idx_stages_change ON stages(change_id)');
     this.db.run('CREATE INDEX IF NOT EXISTS idx_steps_stage ON steps(stage_id)');
+
+    // Migration: add isolation columns to changes table (idempotent)
+    this._migrateAddColumn('changes', 'isolation_status', 'TEXT');
+    this._migrateAddColumn('changes', 'isolation_mode', 'TEXT');
+    this._migrateAddColumn('changes', 'isolation_reason', 'TEXT');
+  }
+
+  /**
+   * 幂等地给表添加列（列已存在则跳过）
+   * @private
+   */
+  _migrateAddColumn(table, column, type) {
+    try {
+      this.db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    } catch {
+      // 列已存在，静默跳过
+    }
   }
 }

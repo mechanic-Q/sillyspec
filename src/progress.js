@@ -394,6 +394,48 @@ export class ProgressManager {
   }
 
   /**
+   * 更新变更的隔离状态
+   * @param {string} cwd - 项目根目录
+   * @param {string} changeName - 变更名
+   * @param {{ status: string, mode?: string, reason?: string }} isolation
+   */
+  async updateChangeIsolation(cwd, changeName, isolation) {
+    const db = await this._ensureDB(cwd);
+    const sqlDb = db.getDb();
+    try {
+      sqlDb.run(
+        `UPDATE changes SET isolation_status = ?, isolation_mode = ?, isolation_reason = ?, last_active = ? WHERE name = ?`,
+        [isolation.status, isolation.mode || null, isolation.reason || null, new Date().toISOString(), changeName]
+      );
+      db._save();
+    } catch (err) {
+      console.warn('⚠️  更新 isolation 状态失败:', err.message);
+    }
+  }
+
+  /**
+   * 读取变更的隔离状态
+   * @param {string} cwd - 项目根目录
+   * @param {string} changeName - 变更名
+   * @returns {{ status: string|null, mode: string|null, reason: string|null }|null}
+   */
+  async readChangeIsolation(cwd, changeName) {
+    const db = await this._ensureDB(cwd);
+    const sqlDb = db.getDb();
+    try {
+      const rows = sqlDb.exec(
+        `SELECT isolation_status, isolation_mode, isolation_reason FROM changes WHERE name = ?`,
+        [changeName]
+      );
+      if (!rows || rows.length === 0 || rows[0].values.length === 0) return null;
+      const [status, mode, reason] = rows[0].values[0];
+      return { status: status || null, mode: mode || null, reason: reason || null };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * 重命名变更：同步更新 DB + 目录
    * @param {string} cwd - 项目根目录
    * @param {string} oldName - 旧变更名

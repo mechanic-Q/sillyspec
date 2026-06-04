@@ -119,24 +119,16 @@ else
   echo "   修复: 在 .gitignore 中添加 $WT_DIR/"
 fi
 
-# 检查 gate-status.json 中的 isolation 状态
-GATE_FILE='.sillyspec/.runtime/gate-status.json'
-if [ -f "$GATE_FILE" ]; then
+# 检查 DB 中的 isolation 状态
+DB_FILE='.sillyspec/.runtime/sillyspec.db'
+if [ -f "$DB_FILE" ]; then
   echo ""
-  echo "gate-status.json isolation 状态:"
-  node -e "
-  const fs = require('fs');
-  const data = JSON.parse(fs.readFileSync('$GATE_FILE','utf8'));
-  const iso = data.isolation || {};
-  const entries = Object.entries(iso);
-  if (entries.length === 0) { console.log('ℹ️ 无 isolation 记录'); process.exit(0); }
-  entries.forEach(([name, info]) => {
-    const icon = info.status === 'verified' ? '✅' : info.status === 'degraded' ? '⚠️' : info.status === 'blocked' ? '❌' : '⬜';
-    console.log(icon + ' ' + name + ' — status: ' + info.status + ', mode: ' + (info.mode || 'N/A'));
-    if (info.status === 'degraded') console.log('   ⚠️ 降级模式，仅 in-place baseline protection');
-    if (info.status === 'blocked') console.log('   ❌ ' + (info.reason || '隔离失败'));
-  });
-  "
+  echo "isolation 状态（来自 sillyspec.db）:"
+  sqlite3 -header -column "$DB_FILE" "SELECT name, isolation_status AS status, isolation_mode AS mode, isolation_reason AS reason FROM changes WHERE status='active'" 2>/dev/null || echo "⚠️ 查询 isolation 失败"
+else
+  echo ""
+  echo "ℹ️ sillyspec.db 不存在（尚未初始化）"
+fi
 else
   echo "ℹ️ gate-status.json 不存在（尚未进入 execute 阶段）"
 fi
