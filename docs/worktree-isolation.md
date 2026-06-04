@@ -117,9 +117,11 @@ allowWrite = stageGate && locationGate && fileGate
 | **`--no-worktree` 标志** | 跳过隔离创建，但 hook 仍然拦截源码写入 |
 | **`SILLYSPEC_DISABLE_HOOKS=1`** | 紧急禁用所有 hook，全部放行 |
 | **无 gate-status.json** | stageGate=false，默认禁止源码写入 |
-| **worktree 创建失败** | 报错停止，不进入无隔离状态 |
+| **worktree 创建失败** | 自动降级为 in-place + baseline protection（mode: in-place-fallback） |
+| **已在 linked worktree** | 复用当前目录（mode: native-worktree） |
+| **worktree 目录未 ignore** | 阻断创建，提示修复 |
 
-> ⚠️ 不存在"降级到放行"的路径。只有"降级到更严格"或"紧急逃生开关"。设计原则是默认安全。
+> ⚠️ in-place 降级模式仍会记录 baseline（baselineFiles + baselineHash + baselineCommit），hook 拦截继续生效，不会无保护地直接写源码。
 
 ## 多 Agent 并行使用
 

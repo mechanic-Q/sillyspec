@@ -163,8 +163,14 @@ export class WorktreeManager {
       );
     }
     if (isolation.inWorktree) {
-      // 已在 linked worktree 中，提示信息而非报错
+      // 已在 linked worktree 中，复用当前目录作为 worktree 路径
       console.log(`ℹ️  已在 linked worktree 中（git-dir: ${isolation.gitDir}），复用当前隔离环境。`);
+      return this._createInPlaceMeta(name, {
+        worktreePath: this.cwd,
+        branch: gitQuiet(this.cwd, 'symbolic-ref --short HEAD') || 'detached',
+        mode: 'native-worktree',
+        base,
+      });
     }
 
     // 1. 检查 worktree 目录是否被 gitignore
@@ -210,7 +216,7 @@ export class WorktreeManager {
       mkdirSync(this.worktreeBase, { recursive: true });
     }
 
-    // 5. 创建 worktree（含版本检测）
+    // 5. 创建 worktree（含版本检测 + sandbox fallback）
     try {
       git(this.cwd, `worktree add ${worktreePath} -b ${branch} ${baseHash}`);
     } catch (e) {
@@ -218,7 +224,16 @@ export class WorktreeManager {
       if (!check.supported) {
         throw new Error(`git worktree add 失败: ${e.stderr || e.message}\n\n${check.reason ? `原因: ${check.reason}` : ''}\n建议: 使用 --no-worktree 标志跳过隔离，或升级 git 到 >= 2.15`);
       }
-      throw new Error(`git worktree add 失败: ${e.stderr || e.message}`);
+      // sandbox/permission fallback: 降级为 in-place + baseline protection
+      console.log(`⚠️  git worktree add 失败（可能是沙箱权限限制），降级为 in-place 模式 + baseline protection`);
+      console.log(`   原因: ${e.stderr || e.message}`);
+      return this._createInPlaceMeta(name, {
+        worktreePath: this.cwd,
+        branch,
+        baseBranch,
+        baseHash,
+        mode: 'in-place-fallback',
+      });
     }
 
     // 5.5 自动同步远程最新代码（防止 worktree 基于过时的 commit）
@@ -269,15 +284,75 @@ export class WorktreeManager {
       actualBaseHash: gitQuiet(worktreePath, 'rev-parse HEAD') || baseHash,
       createdAt: new Date().toISOString(),
       worktreePath,
+      mode: 'worktree',
       baselineFiles,
       baselineCommit,
-      baselineHash,  // 有 dirty baseline 时指向 checkpoint commit
+      baselineHash,
     };
 
     const metaPath = join(worktreePath, META_FILE);
     writeFileSync(metaPath, JSON.stringify(meta, null, 2) + '\n');
 
-    return { branch, worktreePath, baseHash };
+    return { branch, worktreePath, baseHash, mode: meta.mode };
+  }
+
+  /**
+   * 创建 in-place 模式的 meta.json（降级路径）
+   * 不创建 git worktree，直接在当前目录记录 baseline 并写入 meta
+   * @private
+   */
+  _createInPlaceMeta(name, { worktreePath, branch, baseBranch, baseHash, mode } = {}) {
+    // 解析 base
+    if (!baseHash) {
+      baseBranch = baseBranch || gitQuiet(this.cwd, 'symbolic-ref --short HEAD') || gitQuiet(this.cwd, 'rev-parse HEAD');
+      baseHash = git(this.cwd, 'rev-parse HEAD');
+    }
+
+    const baselineResult = this._overlayBaseline(this.cwd, this.cwd);
+    const baselineFiles = baselineResult.files;
+    const baselineHash = baselineResult.baselineHash;
+
+    let baselineCommit = null;
+    if (baselineFiles.length > 0) {
+      baselineCommit = this._createBaselineCheckpoint(this.cwd, name);
+    }
+
+    const meta = {
+      changeName: name,
+      branch: branch || BRANCH_PREFIX + name,
+      baseBranch,
+      baseHash,
+      actualBaseHash: gitQuiet(worktreePath, 'rev-parse HEAD') || baseHash,
+      createdAt: new Date().toISOString(),
+      worktreePath,
+      mode: mode || 'in-place-fallback',
+      baselineFiles,
+      baselineCommit,
+      baselineHash,
+    };
+
+    // in-place 模式下 meta 写入 worktreeBase（避免污染主工作区）
+    if (!existsSync(this.worktreeBase)) {
+      mkdirSync(this.worktreeBase, { recursive: true });
+    }
+    const metaPath = join(this.worktreeBase, name, META_FILE);
+    const metaDir = join(this.worktreeBase, name);
+    if (!existsSync(metaDir)) {
+      mkdirSync(metaDir, { recursive: true });
+    }
+    writeFileSync(metaPath, JSON.stringify(meta, null, 2) + '\n');
+
+    return { branch: meta.branch, worktreePath, baseHash, mode: meta.mode };
+  }
+
+  /**
+   * 获取 worktree 的运行模式
+   * @param {string} changeName
+   * @returns {'worktree'|'native-worktree'|'in-place-fallback'|null}
+   */
+  getMode(changeName) {
+    const meta = this.getMeta(changeName);
+    return meta?.mode || null;
   }
 
   /**
@@ -302,6 +377,7 @@ export class WorktreeManager {
         baseBranch: meta.baseBranch,
         createdAt: meta.createdAt,
         worktreePath: meta.worktreePath,
+        mode: meta.mode || 'worktree',
       });
     }
 
