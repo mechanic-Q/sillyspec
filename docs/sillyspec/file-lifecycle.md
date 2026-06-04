@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-06-04 10:15:00
+updated_at: 2026-06-04 13:20:00
 ---
 
 # SillySpec 文件生命周期描述
@@ -74,6 +74,51 @@ updated_at: 2026-06-04 10:15:00
 ├── local.yaml                  ← 本地配置（构建/测试命令，gitignore）
 └── codebase/SCAN-RAW.md        ← 原始扫描数据（gitignore）
 ```
+
+## 1.1 平台模式目录结构（SillyHub 等）
+
+> 当通过 `--spec-root` 和 `--runtime-root` 参数调用时，SillySpec 进入平台模式。
+> `--spec-root` 的语义是 **SillySpec Storage Root**（替代 `.sillyspec/` 的位置），不是 scan docs root。
+
+**调用方式：**
+```shell
+sillyspec run scan   --spec-root <storage-root>   --runtime-root <runtime-root>   --workspace-id <id>   --scan-run-id <id>
+```
+
+**平台模式输出结构：**
+```
+<spec-root>/
+└── .sillyspec/                    ← SillySpec storage root（由 --spec-root 指定）
+    ├── docs/                      ← 扫描文档（scan/modules/flows/glossary）
+    │   └── <project>/
+    │       ├── scan/
+    │       ├── modules/
+    │       ├── flows/
+    │       └── glossary.md
+    ├── projects/                  ← 项目注册表
+    ├── workflows/                 ← workflow 定义
+    ├── knowledge/                 ← 知识库
+    ├── local.yaml                 ← 本地配置
+    └── manifest.json              ← 平台模式元数据
+
+<runtime-root>/
+└── scan-runs/
+    └── <scan-run-id>/            ← 单次 scan 的运行时产物
+```
+
+**路径映射：**
+| 本地模式路径 | 平台模式路径 |
+|-------------|-------------|
+| `.sillyspec/docs/` | `<spec-root>/.sillyspec/docs/` |
+| `.sillyspec/projects/` | `<spec-root>/.sillyspec/projects/` |
+| `.sillyspec/workflows/` | `<spec-root>/.sillyspec/workflows/` |
+| `.sillyspec/knowledge/` | `<spec-root>/.sillyspec/knowledge/` |
+| `.sillyspec/.runtime/` | `<runtime-root>/` |
+
+**不传参数时，行为与本地模式完全一致。**
+
+---
+
 
 ## 2. 全局状态文件
 
@@ -818,7 +863,43 @@ test_strategy: module
 
 ---
 
-## 8. 文件销毁与归档
+## 8. manifest.json — 平台模式元数据
+
+**创建时机：** 平台模式 scan 阶段全部步骤完成后，由 `runStage()` 自动生成
+
+**存储位置：** `<spec-root>/.sillyspec/manifest.json`
+
+**触发条件：** `sillyspec run scan --spec-root <path>` 传入时
+
+**数据结构：**
+```json
+{
+  "workspace_id": "ws-001",
+  "scan_run_id": "scan-20260604-103000",
+  "source_commit": "abc123def456...",
+  "generated_at": "2026-06-04T10:30:00.000+08:00",
+  "schema_version": 1
+}
+```
+
+**字段说明：**
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `workspace_id` | string? | SillyHub workspace ID（来自 `--workspace-id`） |
+| `scan_run_id` | string? | 本次 scan run ID（来自 `--scan-run-id`） |
+| `source_commit` | string? | 被扫描源码的 git HEAD（非 git 目录时为 null，summary 会提示） |
+| `generated_at` | string | ISO 时间戳 |
+| `schema_version` | integer | manifest 格式版本，当前为 1 |
+
+**写入方：** `runStage()` 中 scan 阶段完成回调
+
+**读取方：** SillyHub 后端读取 workspace spec 信息
+
+**生命周期：** 每次 scan run 完成时覆盖写入（同 workspace 下只保留最新一次）
+
+---
+
+## 9. 文件销毁与归档
 
 ### 变更归档流程
 
@@ -890,7 +971,7 @@ test_strategy: module
 
 ---
 
-## 9. 可选 / 条件生成文件
+## 10. 可选 / 条件生成文件
 
 以下文件不一定存在，在特定条件下才会生成。
 
