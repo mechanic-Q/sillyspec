@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-05-31 11:00:00
-updated_at: 2026-06-03 16:00:00
+updated_at: 2026-06-04 10:15:00
 ---
 
 # SillySpec 文件生命周期描述
@@ -96,7 +96,7 @@ updated_at: 2026-06-03 16:00:00
 | 表 | 用途 | 对应旧版 |
 |------|------|------|
 | `project` | 项目名、schema 版本 | `global.json` 的 `_version` + `project` |
-| `changes` | 变更注册表（名称、当前阶段、状态） | `global.json` 的 `activeChanges` + `progress.json` 的顶层字段 |
+| `changes` | 变更注册表（名称、当前阶段、状态、isolation） | `global.json` 的 `activeChanges` + `progress.json` 的顶层字段 |
 | `stages` | 阶段状态（status / startedAt / completedAt） | `progress.json` 的 `stages.*` |
 | `steps` | 步骤状态（name / status / output） | `progress.json` 的 `stages.*.steps[]` |
 | `batch_progress` | 批量进度统计 | `progress.json` 的 `batchProgress` |
@@ -165,6 +165,9 @@ updated_at: 2026-06-03 16:00:00
 | `currentChange` | `changes.name` | 当前变更名 |
 | `lastActive` | `changes.last_active` | 最后活跃时间 |
 | `noWorktree` | `changes.no_worktree` | 跳过 worktree 标记 |
+| `isolation_status` | `changes.isolation_status` | 隔离状态：pending/verified/degraded/blocked |
+| `isolation_mode` | `changes.isolation_mode` | 隔离模式：worktree/native-worktree/in-place-fallback |
+| `isolation_reason` | `changes.isolation_reason` | blocked/degraded 时的原因说明 |
 | `stages.<name>.status` | `stages.status` | 阶段状态 |
 | `stages.<name>.startedAt` | `stages.started_at` | 阶段开始时间 |
 | `stages.<name>.completedAt` | `stages.completed_at` | 阶段完成时间 |
@@ -661,7 +664,11 @@ modules:
   "baseHash": "abc123...",
   "actualBaseHash": "def456...",
   "createdAt": "2026-05-28T14:00:00.000Z",
-  "worktreePath": "/path/to/.sillyspec/.runtime/worktrees/..."
+  "worktreePath": "/path/to/.sillyspec/.runtime/worktrees/...",
+  "mode": "worktree",
+  "baselineFiles": [],
+  "baselineCommit": null,
+  "baselineHash": null
 }
 ```
 
@@ -675,6 +682,10 @@ modules:
 | `actualBaseHash` | string | fetch+merge 后的实际 HEAD（可能与 baseHash 不同） |
 | `createdAt` | string | ISO 时间戳 |
 | `worktreePath` | string | worktree 目录绝对路径 |
+| `mode` | string | 隔离模式：`worktree` / `native-worktree` / `in-place-fallback` |
+| `baselineFiles` | string[] | dirty baseline overlay 的文件列表 |
+| `baselineCommit` | string? | baseline checkpoint commit hash |
+| `baselineHash` | string? | baseline snapshot hash |
 
 **特殊行为：** 创建后自动 `fetch origin` + `merge origin/main --ff-only` 同步远程最新代码，`actualBaseHash` 记录 merge 后的实际 HEAD。如果本地和远程没有共同祖先则跳过 merge。
 
@@ -821,12 +832,32 @@ test_strategy: module
 
 ### Worktree 清理流程
 
-**触发：** `WorktreeManager.cleanup()`
+**触发：** `WorktreeManager.cleanup(changeName)`
 
-**操作：**
+**安全检查（mode-based）：**
+
+| mode | 行为 | 结果 |
+|------|------|------|
+| `worktree`（SillySpec 创建） | 执行删除 | `cleaned` |
+| `native-worktree`（外部隔离） | **拒绝删除**（除非 `--force`） | 抛错 / `kept` |
+| `in-place-fallback`（降级） | 跳过，无目录可删 | `skipped` / `none` |
+| unknown / missing | 不删除 | `kept` |
+
+**操作（mode=worktree 时）：**
 1. `git worktree remove <path> --force`
-2. `git branch -D <branch>`（忽略分支不存在错误）
-3. 确保目录已删除
+2. 确保目录已删除（fallback rmSync）
+3. `git branch -D <branch>`（忽略分支不存在错误）
+4. 清除 meta 目录
+5. 返回 `{ result: 'cleaned', mode }`
+
+**执行摘要 Worktree 状态：**
+
+| 场景 | 摘要显示 |
+|------|----------|
+| worktree 目录已被删除 | `Worktree: cleaned` |
+| native-worktree 保留 | `Worktree: kept (external worktree)` |
+| in-place-fallback | `Worktree: none (in-place)` |
+| worktree 仍存在 | `Worktree: exists` |
 
 ### 数据存储迁移
 
