@@ -1,0 +1,13 @@
+#!/bin/sh
+echo "🔧 pre-push: running lint + test..."
+npm run lint --silent 2>&1
+if [ $? -ne 0 ]; then
+  echo "❌ pre-push: lint failed, aborting push"
+  exit 1
+fi
+npm test --silent 2>&1
+if [ $? -ne 0 ]; then
+  echo "❌ pre-push: test failed, aborting push"
+  exit 1
+fi
+echo "✅ pre-push: lint + test passed"

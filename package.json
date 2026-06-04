@@ -23,6 +23,10 @@
     "spec-driven"
   ],
   "license": "MIT",
+  "scripts": {
+    "test": "node test/*.test.mjs",
+    "lint": "node --check src/index.js && node --check src/run.js && node --check src/progress.js && node --check src/db.js && node --check src/worktree.js && node --check src/workflow.js && node --check src/worktree-apply.js"
+  },
   "dependencies": {
     "@inquirer/prompts": "^7.10.1",
     "chalk": "^5.6.2",
