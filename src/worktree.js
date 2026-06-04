@@ -346,6 +346,30 @@ export class WorktreeManager {
   }
 
   /**
+   * 构建 isolation 信息对象，用于写入 gate-status.json
+   * @param {string} changeName
+   * @returns {{ status: string, mode: string, path: string } | null}
+   */
+  getIsolationInfo(changeName) {
+    const meta = this.getMeta(changeName);
+    if (!meta) return null;
+
+    const mode = meta.mode || 'worktree';
+    const statusMap = {
+      'worktree': 'verified',
+      'native-worktree': 'verified',
+      'in-place-fallback': 'degraded',
+    };
+
+    return {
+      status: statusMap[mode] || 'verified',
+      mode,
+      path: meta.worktreePath,
+      branch: meta.branch,
+    };
+  }
+
+  /**
    * 获取 worktree 的运行模式
    * @param {string} changeName
    * @returns {'worktree'|'native-worktree'|'in-place-fallback'|null}
