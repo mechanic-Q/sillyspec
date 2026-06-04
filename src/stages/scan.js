@@ -12,7 +12,7 @@ export const definition = {
 1. 列出项目顶层目录：\`ls -d */ 2>/dev/null | grep -v node_modules | grep -v '.git' | grep -v '.sillyspec'\`
 2. 对每个顶层目录，快速判断是否为独立项目（检查 package.json / pom.xml / build.gradle / pyproject.toml / go.mod 等构建文件）
 3. 对每个疑似独立项目，检测技术栈：\`cat <dir>/package.json 2>/dev/null | head -5\` 或类似
-4. 对比 \`.sillyspec/projects/\` 已有配置，找出未注册的子项目
+4. 对比 \`{PROJECTS_ROOT}/\` 已有配置，找出未注册的子项目
 
 ### 判断标准（满足任一即为子项目）
 - 有独立的构建文件（package.json, pom.xml, build.gradle, pyproject.toml 等）
@@ -41,8 +41,8 @@ export const definition = {
       prompt: `确定本次要扫描的项目列表。
 
 ### 操作
-1. \`ls .sillyspec/projects/*.yaml 2>/dev/null\` — 列出所有已注册项目
-2. 对每个项目，检查已有的 scan 文档状态：\`ls .sillyspec/docs/<project>/scan/*.md 2>/dev/null\`
+1. \`ls {PROJECTS_ROOT}/*.yaml 2>/dev/null\` — 列出所有已注册项目
+2. 对每个项目，检查已有的 scan 文档状态：\`ls {DOCS_ROOT}/scan/*.md 2>/dev/null\`
 3. 按以下格式展示：
 
 \`\`\`
@@ -75,7 +75,7 @@ export const definition = {
 1. 进入项目目录（子项目用其 path，如 \`packages/dashboard/\`）
 2. \`cat package.json pom.xml build.gradle go.mod Cargo.toml requirements.txt pyproject.toml Gemfile composer.json 2>/dev/null\`
 3. \`find <project-dir> -maxdepth 2 -name "*.config.*" -not -path "*/node_modules/*" -not -path "*/.git/*" | head -20 | xargs cat 2>/dev/null\`
-4. 结果保存到 \`.sillyspec/docs/<project>/scan/_env-detect.md\`（临时文件，扫描完删除）
+4. 结果保存到 \`{DOCS_ROOT}/scan/_env-detect.md\`（临时文件，扫描完删除）
 
 ### 输出
 每个项目的环境探测结果摘要`,
@@ -90,7 +90,7 @@ export const definition = {
 ### 操作
 对扫描列表中的每个项目分别执行：
 1. 检查 7 份文档是否存在：ARCHITECTURE、STRUCTURE、CONVENTIONS、INTEGRATIONS、TESTING、CONCERNS、PROJECT
-   路径：\`.sillyspec/docs/<project>/scan/<DOC>.md\`
+   路径：\`{DOCS_ROOT}/scan/<DOC>.md\`
 2. 列出已有 ✅ 和缺失 ⬜
 
 ### 输出
@@ -187,7 +187,7 @@ local.yaml 生成结果（已存在/已生成）`,
 
 ### 操作
 对扫描列表中的每个项目分别执行：
-1. 检查 \`.sillyspec/docs/<project>/modules/_module-map.yaml\` 是否已存在，已存在则跳过
+1. 检查 \`{DOCS_ROOT}/modules/_module-map.yaml\` 是否已存在，已存在则跳过
 2. 分析项目源码目录结构，识别模块划分：
    - 用 \`find . -maxdepth 3 -type d -not -path "*/node_modules/*" -not -path "*/.git/*"\` 查看目录结构
    - 每个有明确职责的独立目录识别为一个模块
@@ -200,7 +200,7 @@ local.yaml 生成结果（已存在/已生成）`,
 4. 分析跨模块依赖关系：
    - 用 grep import/require 分析模块间的引用链
    - 填充 depends_on（本模块依赖谁）和 used_by（谁依赖本模块）
-5. 生成 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`
+5. 生成 \`{DOCS_ROOT}/modules/_module-map.yaml\`
 6. 如果 modules/ 目录不存在，先创建
 7. 原子写入（先写 tmp 文件再 rename）
 
@@ -305,8 +305,8 @@ _module-map.yaml 生成结果（已存在/已生成/模块列表）`,
 
 ### 操作
 对扫描列表中的每个项目分别执行：
-1. 读取 \`.sillyspec/docs/<project>/modules/_module-map.yaml\`，获取模块列表和路径
-2. 检查 \`.sillyspec/docs/<project>/modules/\` 下已有的模块文档（<module>.md）
+1. 读取 \`{DOCS_ROOT}/modules/_module-map.yaml\`，获取模块列表和路径
+2. 检查 \`{DOCS_ROOT}/modules/\` 下已有的模块文档（<module>.md）
 3. 列出每个模块的状态：已有文档 / 缺失
 4. **必须停下来问用户**：
    - 展示模块列表及现有文档状态
@@ -323,7 +323,7 @@ _module-map.yaml 生成结果（已存在/已生成/模块列表）`,
 \`\`\`
 模块名：<module-id>
 模块路径：<glob patterns>
-目标文件：.sillyspec/docs/<project>/modules/<module-id>.md
+目标文件：{DOCS_ROOT}/modules/<module-id>.md
 
 操作：
 1. 用 grep/rg 搜索模块路径范围内的源码（禁止读源码全文）
@@ -380,7 +380,7 @@ module_id: <module-id>
 ⚠️ 这一步是可选的。如果项目模块简单、流程不明显，可以跳过。
 
 ### flows/ 目录
-目标目录：\`.sillyspec/docs/<project>/flows/\`
+目标目录：\`{DOCS_ROOT}/flows/\`
 
 根据 _module-map.yaml 中的模块依赖关系，识别跨模块业务流程：
 1. 读取 \`_module-map.yaml\`，分析 used_by 链条
@@ -410,7 +410,7 @@ step1 → step2 → step3
 \`\`\`
 
 ### glossary.md
-目标文件：\`.sillyspec/docs/<project>/glossary.md\`
+目标文件：\`{DOCS_ROOT}/glossary.md\`
 
 提取项目专有术语：
 1. 用 grep 搜索 TODO/FIXME 注释中的术语定义
@@ -446,11 +446,11 @@ step1 → step2 → step3
 
 ### 操作
 对扫描列表中的每个项目分别执行：
-1. 检查 7 份 scan 文档是否全部生成（\`.sillyspec/docs/<project>/scan/\`）
-2. 检查模块文档状态（\`.sillyspec/docs/<project>/modules/\`）
+1. 检查 7 份 scan 文档是否全部生成（\`{DOCS_ROOT}/scan/\`）
+2. 检查模块文档状态（\`{DOCS_ROOT}/modules/\`）
 3. 自检门控：ARCHITECTURE（技术栈+Schema摘要）、CONVENTIONS（隐形规则+代码风格）、STRUCTURE（目录结构）、INTEGRATIONS（外部依赖）、TESTING（测试现状）、CONCERNS（技术债务）、PROJECT（项目概览）
 4. 检查 flows/ 和 glossary.md 是否已生成（如有）
-5. 清理：\`rm -f .sillyspec/docs/<project>/scan/_env-detect.md\`
+5. 清理：\`rm -f {DOCS_ROOT}/scan/_env-detect.md\`
 6. \`git add .sillyspec/\` — 暂存扫描结果（不要 commit，由用户通过统一提交工具处理）
 
 ### 输出

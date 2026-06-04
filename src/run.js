@@ -219,39 +219,40 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
     promptText = promptText.replace(/<change-name>/g, changeName)
   }
   // 平台模式：注入路径覆盖指令（仅 scan 阶段）
-  if (stageName === 'scan' && (platformOpts.specRoot || platformOpts.runtimeRoot)) {
-    const platformDirectives = []
-    if (platformOpts.specRoot) {
-      const specSillyspec = join(platformOpts.specRoot, '.sillyspec')
-      platformDirectives.push(
-        `## ⚠️ 平台模式 — SillySpec Storage Root 覆盖
-` +
-        `本次 scan 的 SillySpec 根目录为 \`${specSillyspec}/\`，替代默认的 \`.sillyspec/\`。\n\n` +
-        `所有路径前缀从 \`.sillyspec/\` 替换为 \`${specSillyspec}/\`：\n\n` +
-        `| 默认路径 | 平台模式路径 |\n|----------|-------------|\n` +
-        `| .sillyspec/docs/ | ${specSillyspec}/docs/ |\n` +
-        `| .sillyspec/projects/ | ${specSillyspec}/projects/ |\n` +
-        `| .sillyspec/workflows/ | ${specSillyspec}/workflows/ |\n` +
-        `| .sillyspec/knowledge/ | ${specSillyspec}/knowledge/ |\n` +
-        `| .sillyspec/local.yaml | ${specSillyspec}/local.yaml |\n\n` +
-        `创建目录：\`mkdir -p ${specSillyspec}/{docs,projects,workflows,knowledge}\`\n` +
-        `所有写入操作使用上述绝对路径，不要回退到 cwd 下的 \`.sillyspec/\`。`
-      )
+  if (stageName === 'scan') {
+    const projectName = dbProjectName || basename(cwd)
+    const specSillyspec = platformOpts?.specRoot
+      ? join(platformOpts.specRoot, '.sillyspec')
+      : join(cwd, '.sillyspec')
+    const docsRoot = join(specSillyspec, 'docs', projectName)
+    const projectsRoot = join(specSillyspec, 'projects')
+
+    promptText = promptText.replace(/\{DOCS_ROOT\}/g, docsRoot)
+    promptText = promptText.replace(/\{PROJECTS_ROOT\}/g, projectsRoot)
+
+    // 平台模式附加指令
+    if (platformOpts?.specRoot || platformOpts?.runtimeRoot) {
+      const platformDirectives = []
+      if (platformOpts.specRoot) {
+        platformDirectives.push(
+          `## ⚠️ 平台模式\n` +
+          `文档路径已参数化：\n` +
+          `- 文档根目录: \`${docsRoot}/\`\n` +
+          `- 项目注册表: \`${projectsRoot}/\`\n` +
+          `创建目录: \`mkdir -p ${docsRoot}/{scan,modules,flows} ${projectsRoot}\`\n`
+        )
+      }
+      if (platformOpts.runtimeRoot) {
+        const scanRunId = platformOpts.scanRunId || 'scan-' + new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')
+        platformDirectives.push(
+          `运行时产物写入: \`${platformOpts.runtimeRoot}/scan-runs/${scanRunId}/\`\n`
+        )
+      }
+      if (platformOpts.workspaceId) {
+        platformDirectives.push(`workspace_id: ${platformOpts.workspaceId}`)
+      }
+      promptText = platformDirectives.join('\n') + '\n\n' + promptText
     }
-    if (platformOpts.runtimeRoot) {
-      const scanRunId = platformOpts.scanRunId || 'scan-' + new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')
-      platformDirectives.push(
-        `\n运行时产物写入：\n` +
-        `\`mkdir -p ${platformOpts.runtimeRoot}/scan-runs/${scanRunId}\`\n` +
-        `原始输出、日志等运行时文件写入此目录。`
-      )
-    }
-    if (platformOpts.workspaceId) {
-      platformDirectives.push(
-        `\nworkspace_id: ${platformOpts.workspaceId}`
-      )
-    }
-    promptText = platformDirectives.join('\n') + '\n\n' + promptText
   }
 
   console.log(promptText)
@@ -815,6 +816,22 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         const { unlinkSync } = await import('fs')
         const platformOptsFile = join(cwd, '.sillyspec', '.runtime', 'platform-scan.json')
         try { unlinkSync(platformOptsFile) } catch {}
+
+        // 平台模式后置校验：检查 source_root 是否被污染
+        if (platformOpts.specRoot) {
+          const { readdirSync } = await import('fs')
+          const localDocsDir = join(cwd, '.sillyspec', 'docs')
+          try {
+            if (existsSync(localDocsDir)) {
+              const entries = readdirSync(localDocsDir, { recursive: true }).filter(e => e.endsWith('.md'))
+              if (entries.length > 0) {
+                console.warn(`⚠️ 平台模式后置校验：source_root 下存在 ${entries.length} 个文档文件：`)
+                console.warn(`   路径：${localDocsDir}/`)  
+                console.warn(`   可能原因：agent 未遵守路径覆盖，将文档写入到了 cwd 而非 spec-root`)
+              }
+            }
+          } catch {}
+        }
       } catch (e) {
         console.warn(`⚠️  manifest.json 写入失败: ${e.message}`)
       }
