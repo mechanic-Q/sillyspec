@@ -14,7 +14,7 @@ SQLite 数据库层 + 进度管理 + 迁移。提供 `.sillyspec/.runtime/sillys
 ## 契约摘要
 
 - **DB** (`src/db.js`) — 基于 sql.js 的内存 SQLite 封装，提供 `init()` / `transaction()` / `query()` / `getDb()` / `_save()`，自动 WAL 模式 + PRAGMA 管理，每次写操作后序列化到磁盘
-- **ProgressManager** (`src/progress.js`) — 进度读写入口，通过 DB 实例操作 `project / changes / stages / steps / batch_progress / approvals` 六张表；支持 `read()` / `init()` / `initChange()` / `show()` / `validate()` / `reset()` 等方法
+- **ProgressManager** (`src/progress.js`) — 进度读写入口，通过 DB 实例操作 `project / changes / stages / steps / batch_progress / approvals` 六张表；支持 `read()` / `init()` / `initChange()` / `show()` / `validate()` / `reset()` / `_updatePlatformLastSync()` / `_updateApprovalStatus()` 等方法
 - **migrateDocs** (`src/migrate.js`) — 一次性迁移工具，将旧结构（`codebase/`、`specs/`、`changes/archive/`）迁移到统一的 `docs/<project>/` 布局（`scan/`、`archive/` 等）
 
 ## 关键逻辑
@@ -31,7 +31,12 @@ DB.transaction(fn)
 
 ProgressManager.read(cwd, changeName?)
   → 从 SQLite 加载指定变更的 stages + steps 状态
-  → 合并 global.json 缓存的 activeChanges 列表
+  → 从 SQL 合并 activeChanges 列表
+
+ProgressManager._write(cwd, progress, changeName)
+  → 写入 stages / steps / changes.current_stage
+  → 更新 gate-status.json（execute / quick）
+  → 辅助阶段完成后由 run.js 清空 currentStage，gate 随之删除
 ```
 
 ## 注意事项
@@ -40,8 +45,10 @@ ProgressManager.read(cwd, changeName?)
 - `_save()` 后必须重新执行 `PRAGMA journal_mode = WAL`（sql.js export 会重置状态）
 - `batch_progress` 和 `approvals` 表按 `change_id` UNIQUE，每个变更只能有一条记录
 - 历史迁移：v1/v2 使用 `progress.json` 文件，v3 全部迁移至 SQLite（`CURRENT_VERSION = 3`）
+- `db.js` DDL 默认 schema_version 仍是 4，但 `progress.js` 当前写入版本是 3；文档不要把 runtime 称为稳定 v4 schema
 - `migrateDocs` 是一次性脚本，不会幂等运行；已存在的文件会被跳过
 
 ## 人工备注
 <!-- MANUAL_NOTES_START -->
+- ql-20260604-001-7a4c | 补齐平台 sync 时间与审批状态的本地写入方法，并记录 quick/archive gate 清理行为。
 <!-- MANUAL_NOTES_END -->

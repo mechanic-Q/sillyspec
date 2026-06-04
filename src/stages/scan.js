@@ -139,16 +139,16 @@ export const definition = {
     },
     {
       name: '生成本地配置',
-      prompt: `自动生成 .sillyspec/.runtime/local.yaml 本地配置文件。
+      prompt: `自动生成 .sillyspec/local.yaml 本地配置文件。
 
 ### 操作
-1. 检查 .sillyspec/.runtime/local.yaml 是否已存在，已存在则跳过（提示"local.yaml 已存在，跳过生成"）
+1. 检查 .sillyspec/local.yaml 是否已存在，已存在则跳过（提示"local.yaml 已存在，跳过生成"）
 2. 根据项目类型生成默认配置：
    - **Node.js**（有 package.json）：build: "npm run build", test: "npm test", lint: "npm run lint", type: nodejs
    - **Maven**（有 pom.xml）：build: "mvn compile", test: "mvn test", lint: "mvn checkstyle:check", type: maven
    - **Gradle**（有 build.gradle）：build: "./gradlew build", test: "./gradlew test", type: gradle
    - **通用项目**：只写注释模板, type: generic
-3. 确保目录存在：mkdir -p .sillyspec/.runtime
+3. 确保目录存在：mkdir -p .sillyspec
 4. 原子写入（先写 tmp 文件再 rename）
 
 ### 文件格式

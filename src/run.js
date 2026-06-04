@@ -17,8 +17,9 @@ import { formatExecuteSummary } from './worktree-apply.js'
  */
 async function triggerSync(cwd, changeName) {
   try {
+    if (changeName && !existsSync(join(cwd, '.sillyspec', 'changes', changeName))) return
     const syncMod = await import('./sync.js')
-    await syncMod.sync(cwd, changeName)
+    await syncMod.sync(changeName, cwd)
   } catch (e) {
     // sync.js 不存在或同步失败，静默跳过
     console.warn('⚠️ 同步失败:', e.message)
@@ -32,7 +33,7 @@ async function triggerSync(cwd, changeName) {
 async function checkApproval(cwd, changeName) {
   try {
     const syncMod = await import('./sync.js')
-    return await syncMod.checkApproval(cwd, changeName)
+    return await syncMod.checkApproval(changeName, cwd)
   } catch (e) {
     // sync.js 不存在或检查失败，静默跳过
     return null
@@ -627,6 +628,39 @@ function validateFileLocations(cwd, stageName, progress, changeName) {
   }
 }
 
+async function archiveChangeDirectory(pm, cwd, progress) {
+  const { renameSync } = await import('fs')
+  const archiveChangeName = progress.currentChange
+  if (!archiveChangeName) {
+    console.error('❌ 归档失败：未找到当前变更名（currentChange）')
+    process.exit(1)
+  }
+  const changesDir = join(cwd, '.sillyspec', 'changes')
+  const archiveDir = join(changesDir, 'archive')
+  const srcDir = join(changesDir, archiveChangeName)
+  const date = new Date().toISOString().slice(0, 10)
+  const destDir = join(archiveDir, `${date}-${archiveChangeName}`)
+
+  if (!existsSync(srcDir)) {
+    console.error(`❌ 归档失败：源目录不存在 ${srcDir}`)
+    process.exit(1)
+  }
+  if (existsSync(destDir)) {
+    console.error(`❌ 归档失败：目标目录已存在 ${destDir}`)
+    process.exit(1)
+  }
+  mkdirSync(archiveDir, { recursive: true })
+  renameSync(srcDir, destDir)
+
+  if (!existsSync(destDir) || existsSync(srcDir)) {
+    console.error('❌ 归档校验失败：移动操作异常')
+    process.exit(1)
+  }
+
+  await pm.unregisterChange(cwd, archiveChangeName)
+  console.log(`📦 已归档：${archiveChangeName} → archive/${date}-${archiveChangeName}/`)
+}
+
 async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
   const { printNext = true, confirm = false, changeName, platformOpts = {} } = options
   const stageData = progress.stages[stageName]
@@ -659,6 +693,18 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     } else {
       steps[currentIdx].output = outputText
     }
+  }
+
+  if (stageName === 'archive' && steps[currentIdx]?.name === '确认归档') {
+    if (!confirm) {
+      steps[currentIdx].status = 'pending'
+      steps[currentIdx].completedAt = null
+      if (outputText) steps[currentIdx].output = null
+      await pm._write(cwd, progress, changeName)
+      console.log('⚠️  请添加 --confirm 确认归档，例如：sillyspec run archive --done --confirm --output "确认归档"')
+      return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
+    }
+    await archiveChangeDirectory(pm, cwd, progress)
   }
 
   // plan 阶段 "展开任务" 完成后，动态插入任务蓝图协调器步骤
@@ -842,45 +888,6 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     // 验证关键文件是否在正确的变更目录下
     validateFileLocations(cwd, stageName, progress, changeName)
 
-    // archive 阶段确认归档
-    if (stageName === 'archive' && steps[currentIdx]?.name === '确认归档') {
-      if (confirm) {
-        const { renameSync } = await import('fs')
-        const archiveChangeName = progress.currentChange
-        if (!archiveChangeName) {
-          console.error('❌ 归档失败：未找到当前变更名（currentChange）')
-          process.exit(1)
-        }
-        const changesDir = join(cwd, '.sillyspec', 'changes')
-        const archiveDir = join(changesDir, 'archive')
-        const srcDir = join(changesDir, archiveChangeName)
-        const date = new Date().toISOString().slice(0, 10)
-        const destDir = join(archiveDir, `${date}-${archiveChangeName}`)
-
-        if (!existsSync(srcDir)) {
-          console.error(`❌ 归档失败：源目录不存在 ${srcDir}`)
-          process.exit(1)
-        }
-        if (existsSync(destDir)) {
-          console.error(`❌ 归档失败：目标目录已存在 ${destDir}`)
-          process.exit(1)
-        }
-        mkdirSync(archiveDir, { recursive: true })
-        renameSync(srcDir, destDir)
-
-        if (!existsSync(destDir) || existsSync(srcDir)) {
-          console.error('❌ 归档校验失败：移动操作异常')
-          process.exit(1)
-        }
-
-        // 从全局活跃列表移除
-        await pm.unregisterChange(cwd, archiveChangeName)
-        console.log(`📦 已归档：${archiveChangeName} → archive/${date}-${archiveChangeName}/`)
-      } else {
-        console.log('⚠️  请添加 --confirm 确认归档，例如：sillyspec run archive --done --confirm --output "确认归档"')
-      }
-    }
-
     // 辅助阶段完成后重置步骤
     const stageDef = stageRegistry[stageName]
     if (stageDef?.auxiliary) {
@@ -893,6 +900,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       stageData.steps = freshSteps
       stageData.status = 'pending'
       stageData.completedAt = null
+      if (progress.currentStage === stageName) progress.currentStage = ''
       await pm._write(cwd, progress, changeName)
     }
 

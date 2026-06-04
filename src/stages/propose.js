@@ -109,7 +109,10 @@ export const definition = {
 - 表名/字段名/类名必须来自真实代码或标注"新增"
 - 用户场景必须用 Given/When/Then 格式
 - tasks.md 只列任务名，细节在 plan 阶段展开`,
-
+      outputHint: '四个文件路径',
+      optional: false
+    },
+    {
       name: '自检门控',
       prompt: `自检生成的规范文件。
 

@@ -16,8 +16,6 @@ import path from 'path'
 
 const WORKTREE_STAGES = ['execute'] // 这些阶段必须在 worktree 里
 
-const WORKTREE_SEGMENT = '.sillyspec/.runtime/worktrees/'
-
 const FILE_WHITELIST_EXTS = ['.md']
 const FILE_WHITELIST_NAMES = ['package.json', 'tsconfig.json', 'local.yaml', 'local.yml']
 
@@ -82,6 +80,55 @@ const STAGE_HINTS = {
 
 function resolveWorktreeDir(cwd) {
   return path.join(cwd, '.sillyspec', '.runtime', 'worktrees')
+}
+
+function findProjectRoot(cwd) {
+  let dir = path.resolve(cwd || process.cwd())
+  while (true) {
+    if (
+      existsSync(path.join(dir, '.sillyspec', '.runtime', 'gate-status.json')) ||
+      existsSync(path.join(dir, '.sillyspec', '.runtime', 'sillyspec.db')) ||
+      existsSync(path.join(dir, '.sillyspec', 'local.yaml')) ||
+      existsSync(path.join(dir, '.sillyspec', 'local.yml')) ||
+      existsSync(path.join(dir, '.sillyspec', 'projects'))
+    ) {
+      return dir
+    }
+    const parent = path.dirname(dir)
+    if (parent === dir) return path.resolve(cwd || process.cwd())
+    dir = parent
+  }
+}
+
+function safeChangeName(changeName) {
+  return typeof changeName === 'string'
+    && changeName
+    && !changeName.includes('..')
+    && !changeName.includes('/')
+    && !changeName.includes('\\')
+}
+
+function readWorktreeMeta(cwd, changeName) {
+  if (!safeChangeName(changeName)) return null
+  const metaPath = path.join(resolveWorktreeDir(cwd), changeName, 'meta.json')
+  if (!existsSync(metaPath)) return null
+  try {
+    return JSON.parse(readFileSync(metaPath, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+function isPathInside(child, parent) {
+  if (!child || !parent) return false
+  const absChild = path.resolve(child)
+  const absParent = path.resolve(parent)
+  return absChild === absParent || absChild.startsWith(absParent + path.sep)
+}
+
+function isInsideWorktreeStorage(filePath, cwd) {
+  const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(cwd || process.cwd(), filePath)
+  return isPathInside(absPath, resolveWorktreeDir(cwd || process.cwd()))
 }
 
 /**
@@ -155,8 +202,18 @@ function isNoWorktreeMode(cwd) {
  * @param {string} filePath - 绝对路径
  * @returns {boolean}
  */
-function isInsideWorktree(filePath) {
-  return filePath.includes(WORKTREE_SEGMENT)
+function isInsideRegisteredWorktree(filePath, cwd) {
+  const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(cwd || process.cwd(), filePath)
+  const effectiveCwd = cwd || process.cwd()
+  const gateStatus = readGateStatus(effectiveCwd)
+  const changes = Array.isArray(gateStatus?.changes) ? gateStatus.changes : []
+
+  for (const changeName of changes) {
+    const meta = readWorktreeMeta(effectiveCwd, changeName)
+    if (meta?.worktreePath && isPathInside(absPath, meta.worktreePath)) return true
+  }
+
+  return false
 }
 
 /**
@@ -194,6 +251,8 @@ function matchFileWhitelist(filePath) {
  */
 function loadLocalConfig(cwd) {
   const candidates = [
+    path.join(cwd, '.sillyspec', 'local.yaml'),
+    path.join(cwd, '.sillyspec', 'local.yml'),
     path.join(cwd, 'local.yaml'),
     path.join(cwd, 'local.yml'),
   ]
@@ -209,49 +268,74 @@ function loadLocalConfig(cwd) {
   return {}
 }
 
-/**
- * 简易 YAML 解析，只处理顶层简单结构
- */
 function parseSimpleYaml(content) {
   const result = {}
-  let currentKey = null
-  let inArray = false
+  let topKey = null
+  let childKey = null
+
+  function parseValue(value) {
+    const trimmed = value.trim()
+    if (!trimmed) return ''
+    if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+      return trimmed.slice(1, -1)
+    }
+    if (trimmed === 'true') return true
+    if (trimmed === 'false') return false
+    return trimmed
+  }
 
   for (const line of content.split('\n')) {
-    const trimmed = line.trim()
+    const noComment = line.replace(/\s+#.*$/, '')
+    const trimmed = noComment.trim()
     if (!trimmed || trimmed.startsWith('#')) continue
+    const indent = noComment.length - noComment.trimStart().length
 
-    // 顶层键
-    const topLevelMatch = trimmed.match(/^(\S[\S]*)\s*:\s*(.*)$/)
-    if (topLevelMatch && !trimmed.startsWith(' ')) {
+    if (indent === 0) {
+      const topLevelMatch = trimmed.match(/^([^:]+):\s*(.*)$/)
+      if (!topLevelMatch) continue
       const key = topLevelMatch[1]
-      const val = topLevelMatch[2].trim()
-      currentKey = key
+      const value = topLevelMatch[2]
+      topKey = key
+      childKey = null
 
-      if (val) {
-        // key: value (单行)
-        result[key] = val
-        inArray = false
+      if (value.trim()) {
+        result[key] = parseValue(value)
       } else {
-        // key: (多行值开始)
-        result[key] = []
-        inArray = true
+        result[key] = {}
       }
       continue
     }
 
-    // 数组项
-    if (inArray && currentKey && trimmed.startsWith('- ')) {
-      const item = trimmed.slice(2).trim()
-      if (Array.isArray(result[currentKey])) {
-        result[currentKey].push(item)
-      }
+    if (!topKey) continue
+
+    if (indent === 2 && trimmed.startsWith('- ')) {
+      if (!Array.isArray(result[topKey])) result[topKey] = []
+      result[topKey].push(parseValue(trimmed.slice(2)))
       continue
     }
 
-    // 非数组行结束数组模式
-    if (inArray && !trimmed.startsWith('- ') && !trimmed.startsWith('#')) {
-      inArray = false
+    if (indent === 2) {
+      const childMatch = trimmed.match(/^([^:]+):\s*(.*)$/)
+      if (!childMatch) continue
+      childKey = childMatch[1]
+      const value = childMatch[2]
+      if (typeof result[topKey] !== 'object' || Array.isArray(result[topKey])) result[topKey] = {}
+      result[topKey][childKey] = value.trim() ? parseValue(value) : []
+      continue
+    }
+
+    if (indent >= 4 && childKey && trimmed.startsWith('- ')) {
+      if (typeof result[topKey] !== 'object' || Array.isArray(result[topKey])) result[topKey] = {}
+      if (!Array.isArray(result[topKey][childKey])) result[topKey][childKey] = []
+      result[topKey][childKey].push(parseValue(trimmed.slice(2)))
+    }
+  }
+
+  for (const key of Object.keys(result)) {
+    if (result[key] && typeof result[key] === 'object' && !Array.isArray(result[key])) {
+      if (Object.keys(result[key]).length === 0) {
+        result[key] = {}
+      }
     }
   }
 
@@ -401,14 +485,15 @@ function buildStageHint(stage) {
 export function shouldBlockWrite(filePath, cwd) {
   if (!filePath) return { blocked: true, reason: 'no file path' }
 
-  const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(cwd || process.cwd(), filePath)
+  const callerCwd = cwd || process.cwd()
+  const projectRoot = findProjectRoot(callerCwd)
+  const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(callerCwd, filePath)
 
-  // 1. 文件门禁：文档类/配置类始终放行
-  if (matchFileWhitelist(absPath)) return { blocked: false }
+  // 1. 文件门禁：文档类/配置类始终放行，但 worktree 存储区内的源码必须继续走登记校验。
+  if (!isInsideWorktreeStorage(absPath, projectRoot) && matchFileWhitelist(absPath)) return { blocked: false }
 
   // 2. 阶段门禁（使用 fallback 读取）
-  const effectiveCwd = cwd || process.cwd()
-  const stage = readCurrentStage(effectiveCwd) || '(none)'
+  const stage = readCurrentStage(projectRoot) || '(none)'
 
   if (!['execute', 'quick'].includes(stage)) {
     return {
@@ -421,10 +506,10 @@ export function shouldBlockWrite(filePath, cwd) {
   if (stage === 'quick') return { blocked: false }
 
   // execute 阶段：位置门禁
-  if (isInsideWorktree(absPath)) return { blocked: false }
+  if (isInsideRegisteredWorktree(absPath, projectRoot)) return { blocked: false }
 
   // noWorktree 模式：无隔离环境，禁止源码写入（降级到更严格）
-  if (isNoWorktreeMode(effectiveCwd)) {
+  if (isNoWorktreeMode(projectRoot)) {
     return {
       blocked: true,
       reason: [
@@ -441,7 +526,7 @@ export function shouldBlockWrite(filePath, cwd) {
       '源码修改只能在 worktree 隔离环境中进行。',
       '',
       '你可能需要：',
-      '  1. 确认 worktree 已创建：sillyspec worktree list',
+      '  1. 确认 worktree 已创建并登记：sillyspec worktree list',
       '  2. 如未创建，先创建：sillyspec worktree create <变更名>',
       '  3. 在 worktree 目录中工作（子代理的 cwd 设为 worktree 路径）',
       '',
@@ -460,17 +545,18 @@ export function shouldBlockWrite(filePath, cwd) {
 export function shouldBlockBash(command, cwd) {
   if (!command || !command.trim()) return { blocked: false }
 
-  const effectiveCwd = cwd || process.cwd()
+  const callerCwd = cwd || process.cwd()
+  const projectRoot = findProjectRoot(callerCwd)
 
   // cwd 在 worktree 内 → 全部放行
-  if (isInsideWorktree(effectiveCwd)) return { blocked: false }
+  if (isInsideRegisteredWorktree(callerCwd, projectRoot)) return { blocked: false }
 
   // 阶段门禁（使用 fallback 读取）
-  const stage = readCurrentStage(effectiveCwd) || '(none)'
+  const stage = readCurrentStage(projectRoot) || '(none)'
 
   if (!['execute', 'quick'].includes(stage)) {
     // 非 execute/quick 阶段，只允许只读白名单
-    const localConfig = loadLocalConfig(effectiveCwd)
+    const localConfig = loadLocalConfig(projectRoot)
     const extraReadonly = localConfig.worktreeHook?.readonlyCommands || localConfig['worktree-hook']?.readonlyCommands || []
     if (matchReadonlyWhitelist(command, extraReadonly)) return { blocked: false }
     return {
@@ -489,7 +575,7 @@ export function shouldBlockBash(command, cwd) {
   }
 
   // execute 阶段 + 主工作区
-  const localConfig = loadLocalConfig(effectiveCwd)
+  const localConfig = loadLocalConfig(projectRoot)
   const extraReadonly = localConfig.worktreeHook?.readonlyCommands || localConfig['worktree-hook']?.readonlyCommands || []
 
   // 危险黑名单

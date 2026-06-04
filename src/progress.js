@@ -435,6 +435,43 @@ export class ProgressManager {
     }
   }
 
+  async _updatePlatformLastSync(cwd, changeName) {
+    if (!changeName) return;
+    const db = await this._ensureDB(cwd);
+    db.transaction((sqlDb) => {
+      sqlDb.run(
+        'UPDATE changes SET platform_last_sync = ?, platform_sync_enabled = 1 WHERE name = ?',
+        [new Date().toISOString(), changeName]
+      );
+    });
+  }
+
+  async _updateApprovalStatus(cwd, changeName, status, reason = null) {
+    if (!changeName || !status) return;
+    const db = await this._ensureDB(cwd);
+    db.transaction((sqlDb) => {
+      const rows = sqlDb.exec('SELECT id FROM changes WHERE name = ?', [changeName]);
+      if (!rows || rows.length === 0 || rows[0].values.length === 0) return;
+      const changeId = rows[0].values[0][0];
+      const now = new Date().toISOString();
+      sqlDb.run(
+        `INSERT INTO approvals (change_id, status, requested_at, approved_at, rejection_reason)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(change_id) DO UPDATE SET
+           status = excluded.status,
+           approved_at = excluded.approved_at,
+           rejection_reason = excluded.rejection_reason`,
+        [
+          changeId,
+          status,
+          now,
+          status === 'approved' ? now : null,
+          status === 'rejected' ? reason : null,
+        ]
+      );
+    });
+  }
+
   /**
    * 重命名变更：同步更新 DB + 目录
    * @param {string} cwd - 项目根目录

@@ -124,15 +124,14 @@ module_id: <module-id>
     },
     {
       name: '确认归档',
-      prompt: `确认归档内容并执行目录移动。
+      prompt: `确认归档内容，由 CLI 执行目录移动。
 
 ### 操作
 1. 展示：变更目录名、包含的文件列表（含 module-impact.md）、生成总结
-2. **直接执行归档**（本步骤完成后自动移动）：
-   - 创建 archive 目录：\`mkdir -p .sillyspec/changes/archive\`
-   - 移动变更目录：\`mv .sillyspec/changes/<change-name> .sillyspec/changes/archive/<change-name>\`
-   - 确认移动成功：\`ls .sillyspec/changes/archive/<change-name>/\`
-3. 确保所有 checkbox 都已勾选
+2. 确保所有 checkbox 都已勾选
+3. 让用户确认后，用 \`--confirm\` 完成本步骤：
+   \`sillyspec run archive --done --confirm --output "确认归档"\`
+4. CLI 会创建 \`.sillyspec/changes/archive/\`，并将变更目录移动到 \`.sillyspec/changes/archive/YYYY-MM-DD-<change-name>/\`
 
 ### 输出
 归档完成 + archive 目录路径`,
@@ -147,10 +146,7 @@ module_id: <module-id>
 1. 如果 \`.sillyspec/ROADMAP.md\` 存在，标记对应 Phase 为已完成
 2. \`git add .sillyspec/changes/\` — 暂存归档结果（不要 commit，由用户通过统一提交工具处理）
 3. \`git add .sillyspec/docs/\` — 暂存模块文档更新（如有）
-4. 更新 sillyspec.db 中的阶段状态：
-   - 清除当前变更信息（归档后不再活跃）
-   - 如果是主变更（有 MASTER.md），标记所有阶段为 ✅，然后清除
-   - 历史记录追加时间 + 归档完成
+4. 确认 sillyspec.db 中该变更已不再 active（确认归档步骤由 CLI 调用 unregisterChange）
 
 ### 输出
 归档完成确认 + 累积规范统计`,
