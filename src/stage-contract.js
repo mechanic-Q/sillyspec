@@ -30,10 +30,12 @@ import { join, basename } from 'path'
  * scan 完成校验：检查 7 份 scan 文档 + manifest
  */
 function validateScanOutputs(cwd, changeName, context = {}) {
-  const { projectName } = context
+  const { projectName, specRoot } = context
+  // 平台模式使用 specRoot，本地模式使用 cwd
+  const base = specRoot || cwd
   const docsRoot = projectName
-    ? join(cwd, '.sillyspec', 'docs', projectName, 'scan')
-    : join(cwd, '.sillyspec', 'docs', 'scan')
+    ? join(base, '.sillyspec', 'docs', projectName, 'scan')
+    : join(base, '.sillyspec', 'docs', 'scan')
 
   const requiredDocs = [
     'ARCHITECTURE.md',
@@ -56,8 +58,8 @@ function validateScanOutputs(cwd, changeName, context = {}) {
 
   // 检查 modules 目录
   const modulesRoot = projectName
-    ? join(cwd, '.sillyspec', 'docs', projectName, 'modules')
-    : join(cwd, '.sillyspec', 'docs', 'modules')
+    ? join(base, '.sillyspec', 'docs', projectName, 'modules')
+    : join(base, '.sillyspec', 'docs', 'modules')
   if (!existsSync(modulesRoot)) {
     warnings.push('modules 目录不存在')
   } else {

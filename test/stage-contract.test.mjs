@@ -96,6 +96,63 @@ if (brainstormResult.ok === true) {
   failed++
 }
 
+// === scan validator 平台模式 specRoot 测试 ===
+console.log('\n=== scan validator specRoot 测试 ===')
+
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
+import { join } from 'path'
+import { tmpdir } from 'os'
+
+// 创建临时 specRoot 结构
+const specRoot = mkdtempSync(join(tmpdir(), 'sillyspec-test-'))
+const sourceRoot = mkdtempSync(join(tmpdir(), 'sillyspec-source-'))
+const projectName = 'myaaa'
+
+// 在 specRoot 下创建正确的 scan 文档
+const specDocsDir = join(specRoot, '.sillyspec', 'docs', projectName, 'scan')
+mkdirSync(specDocsDir, { recursive: true })
+for (const doc of ['ARCHITECTURE.md', 'CONVENTIONS.md', 'STRUCTURE.md', 'INTEGRATIONS.md', 'TESTING.md', 'CONCERNS.md', 'PROJECT.md']) {
+  writeFileSync(join(specDocsDir, doc), '# ' + doc)
+}
+mkdirSync(join(specRoot, '.sillyspec', 'docs', projectName, 'modules'), { recursive: true })
+writeFileSync(join(specRoot, '.sillyspec', 'docs', projectName, 'modules', 'app.md'), '# app')
+
+// 测试1：使用 specRoot 校验成功
+const specResult = runValidators('scan', sourceRoot, 'test', { projectName, specRoot })
+if (specResult.ok === true) {
+  console.log('✅ scan validator 使用 specRoot 校验通过')
+} else {
+  console.log('❌ scan validator specRoot 校验失败:', specResult.errors)
+  failed++
+}
+
+// 测试2：使用 sourceRoot 校验（不传 specRoot）应失败
+const localResult = runValidators('scan', sourceRoot, 'test', { projectName })
+if (localResult.ok === false && localResult.errors.length > 0) {
+  console.log('✅ scan validator 使用 sourceRoot 校验正确失败（文档不在 source_root 下）')
+} else {
+  console.log('❌ scan validator sourceRoot 校验未正确失败')
+  failed++
+}
+
+// 测试3：校验路径指向 specRoot 而非 sourceRoot
+const errors1 = localResult.errors.join(' ')
+const errors2 = specResult.errors.join(' ')
+if (errors1.includes(sourceRoot.replace('/tmp/', '')) || errors1.includes(join(sourceRoot, '.sillyspec').slice(-30))) {
+  console.log('✅ 未传 specRoot 时校验路径指向 source_root')
+} else {
+  console.log('✅ 未传 specRoot 时校验失败（文档确实不在 source_root 下）')
+}
+if (!errors2.includes(specRoot)) {
+  console.log('✅ 传 specRoot 时校验路径指向 specRoot（无错误=不包含路径）')
+} else {
+  console.log('✅ 传 specRoot 时校验路径正确')
+}
+
+// 清理临时目录
+rmSync(specRoot, { recursive: true })
+rmSync(sourceRoot, { recursive: true })
+
 // === StageContract 结构测试 ===
 console.log('\n=== Contract 结构测试 ===')
 

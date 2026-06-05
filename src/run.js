@@ -427,23 +427,38 @@ export async function runCommand(args, cwd) {
     scanRunId: getFlagValue('--scan-run-id'),
   }
 
-  // 跨 --done 生命周期：优先从 metadata 文件恢复 platformOpts
-  // 首次 scan 时写入，后续 --done 读取
+  // 跨 --done 生命周期：从 metadata 文件恢复 platformOpts
+  // 首次 scan 时写入，所有后续调用（包括 run、--done、--skip）都读取
   const platformOptsFile = join(cwd, '.sillyspec', '.runtime', 'platform-scan.json')
-  if (isDone || isSkip) {
-    // --done/--skip 阶段：从文件恢复
-    try {
-      const { readFileSync } = await import('fs')
-      const saved = JSON.parse(readFileSync(platformOptsFile, 'utf8'))
-      if (saved.specRoot) platformOpts.specRoot = saved.specRoot
-      if (saved.runtimeRoot) platformOpts.runtimeRoot = saved.runtimeRoot
-      if (saved.workspaceId) platformOpts.workspaceId = saved.workspaceId
-      if (saved.scanRunId) platformOpts.scanRunId = saved.scanRunId
-    } catch {
-      // 文件不存在，说明不是平台模式，跳过
+  let platformFileExists = existsSync(platformOptsFile)
+  // 如果命令行没传 spec-root，尝试从持久化文件恢复
+  if (!platformOpts.specRoot && !platformOpts.runtimeRoot) {
+    if (platformFileExists) {
+      try {
+        const { readFileSync } = await import('fs')
+        const saved = JSON.parse(readFileSync(platformOptsFile, 'utf8'))
+        if (saved.specRoot) platformOpts.specRoot = saved.specRoot
+        if (saved.runtimeRoot) platformOpts.runtimeRoot = saved.runtimeRoot
+        if (saved.workspaceId) platformOpts.workspaceId = saved.workspaceId
+        if (saved.scanRunId) platformOpts.scanRunId = saved.scanRunId
+        // 平台模式 fail-fast：文件存在但缺少 specRoot
+        if (!platformOpts.specRoot && !platformOpts.runtimeRoot) {
+          console.error(`❌ 平台模式参数文件存在但缺少 specRoot/runtimeRoot: ${platformOptsFile}`)
+          console.error('   可能原因：platform-scan.json 损坏或写入不完整')
+          console.error('   解决：重新运行首次 scan 并传入 --spec-root')
+          process.exit(1)
+        }
+      } catch (e) {
+        console.error(`❌ 平台模式参数文件读取失败: ${platformOptsFile}`)
+        console.error(`   错误: ${e.message}`)
+        console.error('   可能原因：文件损坏')
+        console.error('   解决：删除该文件并重新运行首次 scan 传入 --spec-root')
+        process.exit(1)
+      }
     }
-  } else if (platformOpts.specRoot || platformOpts.runtimeRoot) {
-    // 首次 scan：持久化 platformOpts
+  }
+  // 持久化 platformOpts（命令行传入或已恢复的都持久化）
+  if (platformOpts.specRoot || platformOpts.runtimeRoot) {
     try {
       const { mkdirSync, writeFileSync } = await import('fs')
       mkdirSync(join(cwd, '.sillyspec', '.runtime'), { recursive: true })
@@ -878,7 +893,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
   // archive "确认归档" 步骤完成后，校验归档完整性
   if (stageName === 'archive' && steps[currentIdx]?.name === '确认归档' && confirm) {
     const projectName = progress.project || basename(cwd)
-    const contractResult = runValidators('archive', cwd, changeName, { projectName })
+    const contractResult = runValidators('archive', cwd, changeName, { projectName, specRoot: platformOpts?.specRoot })
     if (contractResult.errors.length > 0) {
       console.error(`\n❌ 归档校验失败：`)
       for (const err of contractResult.errors) {
@@ -1121,7 +1136,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
 
   // 阶段完成校验
   const projectName = progress.project || basename(cwd)
-  const contractResult = runValidators(stageName, cwd, changeName, { projectName })
+  const contractResult = runValidators(stageName, cwd, changeName, { projectName, specRoot: platformOpts?.specRoot })
   if (contractResult.errors.length > 0) {
     console.error(`\n❌ 阶段 ${stageName} 校验失败：`)
     for (const err of contractResult.errors) {
