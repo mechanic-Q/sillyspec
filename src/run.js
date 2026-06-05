@@ -605,7 +605,7 @@ export async function runCommand(args, cwd) {
   }
 
   // 默认：输出当前步骤
-  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts)
+  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isForceBaseline })
 }
 
 /**
@@ -620,7 +620,7 @@ function resolveChangeNameAuto(cwd) {
   return null
 }
 
-async function runStage(pm, progress, stageName, cwd, changeName, skipApproval = false, platformOpts = {}) {
+async function runStage(pm, progress, stageName, cwd, changeName, skipApproval = false, platformOpts = {}, quickOpts = {}) {
   // 状态转换校验
   const prevStage = progress.currentStage || ''
   const transition = checkTransition(prevStage, stageName)
@@ -696,9 +696,9 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
         .trim().split('\n').filter(Boolean)
         .map(line => line.slice(3).trim())
         .filter(f => !f.startsWith('.sillyspec/'))
-      const allowedFiles = quickFiles || []
-      const allowNew = isAllowNew || false
-      const forceBaseline = isForceBaseline || false
+      const allowedFiles = quickOpts?.quickFiles || []
+      const allowNew = quickOpts?.isAllowNew || false
+      const forceBaseline = quickOpts?.isForceBaseline || false
       progress.quickGuard = {
         baselineCommit: execSync('git rev-parse HEAD', { cwd, encoding: 'utf8', timeout: 5000 }).trim(),
         baselineFiles,
