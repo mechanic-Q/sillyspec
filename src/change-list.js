@@ -40,7 +40,7 @@ export function parseFileChangeList(designMdPath) {
       continue
     }
 
-    const filePath = cells[1].trim()
+    const filePath = cells[1].trim().replace(/^`|`$/g, '')
 
     // 忽略空路径、注释、.sillyspec/ 内的路径
     if (!filePath || filePath === '—' || filePath === '-' || filePath.startsWith('.sillyspec/')) continue
