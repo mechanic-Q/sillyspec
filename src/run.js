@@ -299,7 +299,9 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
   console.log(`project: ${projectName}`)
   if (changeName) {
     console.log(`change: ${changeName}`)
-    const changeDir = join('.sillyspec', 'changes', changeName)
+    const isPlatform = platformOpts?.specRoot || platformOpts?.runtimeRoot
+    const changeDirBase = isPlatform ? platformOpts.specRoot : '.sillyspec'
+    const changeDir = join(changeDirBase, 'changes', changeName)
     console.log(`changeDir: ${changeDir}`)
   }
   console.log(`---\n`)
@@ -418,7 +420,9 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
   }
   // 路径安全规则：防止 AI 拼错变更目录
   if (changeName) {
-    const changeDir = join('.sillyspec', 'changes', changeName)
+    const isPlatform = platformOpts?.specRoot || platformOpts?.runtimeRoot
+    const changeDirBase = isPlatform ? platformOpts.specRoot : '.sillyspec'
+    const changeDir = join(changeDirBase, 'changes', changeName)
     console.log(`- **文件路径规则：所有变更文件必须写入 \`${changeDir}/\` 目录下。不要自己拼接路径，直接使用 changeDir 值。示例：\`${changeDir}/proposal.md\`**`)
   }
   const changeFlag = changeName ? ` --change ${changeName}` : ''
@@ -471,7 +475,19 @@ export async function runCommand(args, cwd, specDir = null) {
   // 首次 scan 时写入，所有后续调用（包括 run、--done、--skip）都读取
   // 优先在 specDir 下查找，否则回退到 cwd/.sillyspec/.runtime/
   const specRoot = platformOpts.specRoot || resolveSpecDir(cwd)
-  const platformOptsFile = join(specRoot, '.runtime', 'platform-scan.json')
+  // platform-scan.json 搜索策略（多路径兼容）：
+  // 平台模式首次 scan 写入 specRoot/.runtime/，但后续 --done 可能不带 --spec-root
+  // 需要在多个候选位置搜索
+  const candidatePaths = []
+  if (platformOpts.specRoot) {
+    candidatePaths.push(join(platformOpts.specRoot, '.runtime', 'platform-scan.json'))
+  }
+  if (resolvedSpecDir) {
+    candidatePaths.push(join(resolve(resolvedSpecDir), '.runtime', 'platform-scan.json'))
+  }
+  candidatePaths.push(join(specRoot, '.runtime', 'platform-scan.json')) // cwd/.sillyspec/.runtime/
+
+  let platformOptsFile = candidatePaths.find(p => existsSync(p)) || candidatePaths[0]
   let platformFileExists = existsSync(platformOptsFile)
   // 如果命令行没传 spec-root，尝试从持久化文件恢复
   if (!platformOpts.specRoot && !platformOpts.runtimeRoot) {
@@ -499,12 +515,23 @@ export async function runCommand(args, cwd, specDir = null) {
       }
     }
   }
-  // 持久化 platformOpts（命令行传入或已恢复的都持久化）
+  // 持久化 platformOpts
+  // 在 specRoot/.runtime/ 写主文件，同时在 cwd/.sillyspec/.runtime/ 写恢复指针
   if (platformOpts.specRoot || platformOpts.runtimeRoot) {
     try {
       const { mkdirSync, writeFileSync } = await import('fs')
       mkdirSync(join(specRoot, '.runtime'), { recursive: true })
       writeFileSync(platformOptsFile, JSON.stringify({
+        specRoot: platformOpts.specRoot,
+        runtimeRoot: platformOpts.runtimeRoot,
+        workspaceId: platformOpts.workspaceId,
+        scanRunId: platformOpts.scanRunId,
+        savedAt: new Date().toISOString(),
+      }, null, 2) + '\n')
+      // 恢复指针：在 cwd/.sillyspec/.runtime/ 也写一份，供后续 --done（不带 --spec-root）找到
+      const cwdRuntimeDir = join(cwd, '.sillyspec', '.runtime')
+      mkdirSync(cwdRuntimeDir, { recursive: true })
+      writeFileSync(join(cwdRuntimeDir, 'platform-scan.json'), JSON.stringify({
         specRoot: platformOpts.specRoot,
         runtimeRoot: platformOpts.runtimeRoot,
         workspaceId: platformOpts.workspaceId,

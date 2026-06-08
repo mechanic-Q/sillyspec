@@ -33,9 +33,12 @@ function validateScanOutputs(cwd, changeName, context = {}) {
   const { projectName, specRoot } = context
   // 平台模式使用 specRoot，本地模式使用 cwd
   const base = specRoot || cwd
+  // 如果 base 已经是 specDir（有 docs/ 子目录），直接用 base/docs/
+  // 否则按传统模式拼接 .sillyspec/docs/
+  const isSpecDir = existsSync(join(base, 'docs'))
   const docsRoot = projectName
-    ? join(base, '.sillyspec', 'docs', projectName, 'scan')
-    : join(base, '.sillyspec', 'docs', 'scan')
+    ? join(base, isSpecDir ? 'docs' : '.sillyspec/docs', projectName, 'scan')
+    : join(base, isSpecDir ? 'docs' : '.sillyspec/docs', 'scan')
 
   const requiredDocs = [
     'ARCHITECTURE.md',
@@ -58,8 +61,8 @@ function validateScanOutputs(cwd, changeName, context = {}) {
 
   // 检查 modules 目录
   const modulesRoot = projectName
-    ? join(base, '.sillyspec', 'docs', projectName, 'modules')
-    : join(base, '.sillyspec', 'docs', 'modules')
+    ? join(base, isSpecDir ? 'docs' : '.sillyspec/docs', projectName, 'modules')
+    : join(base, isSpecDir ? 'docs' : '.sillyspec/docs', 'modules')
   if (!existsSync(modulesRoot)) {
     warnings.push('modules 目录不存在')
   } else {
