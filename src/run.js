@@ -605,6 +605,9 @@ export async function runCommand(args, cwd, specDir = null) {
   }
 
   const isAuxiliary = auxiliaryStages.includes(stageName)
+  // scan 元数据追踪（供 postcheck 使用）
+  let _scanProjectListParsed = undefined // undefined=未到达step2, true=解析成功, false=解析失败
+  let _scanManifestWritten = undefined // undefined=未尝试, true=成功, false=失败
 
   const pm = new ProgressManager({ specDir: specRoot })
   let progress = await pm.read(cwd, changeName)
@@ -1024,6 +1027,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       const numbered = outputText.match(/^\s*\d+\.\s+(\S+)/gm)
       if (numbered) {
         projectNames = numbered.map(m => m.replace(/^\s*\d+\.\s+/, '').replace(/[—\-:].*$/, '').trim())
+        if (projectNames.length > 0) _scanProjectListParsed = true
       }
       // 匹配方式 2: 括号枚举 "子项目frontend/order-service/user-service" 或 "项目: a, b, c"
       if (projectNames.length === 0) {
@@ -1033,6 +1037,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
             .split(/[\/、,，]+/)
             .map(s => s.trim())
             .filter(Boolean)
+          if (projectNames.length > 0) _scanProjectListParsed = true
         }
       }
       // 匹配方式 3: 结构化 YAML block "scan_projects:\n  - id: name"
@@ -1040,12 +1045,14 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         const yamlMatch = outputText.match(/scan_projects:\s*\n((?:\s+-\s+id:\s+\S+\s*\n?)+)/)
         if (yamlMatch) {
           projectNames = [...yamlMatch[1].matchAll(/-\s+id:\s*(\S+)/g)].map(m => m[1])
+          if (projectNames.length > 0) _scanProjectListParsed = true
         }
       }
     }
     if (projectNames.length === 0) {
       // 回退：读取所有已注册项目
       console.warn('⚠️ 未能从 step 2 输出解析项目列表，回退扫描所有注册项目')
+      _scanProjectListParsed = false
       const projectsDir = join(specBase, 'projects')
       if (existsSync(projectsDir)) {
         projectNames = readdirSync(projectsDir)
@@ -1055,6 +1062,27 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     }
     if (projectNames.length === 0) {
       projectNames = ['sillyspec'] // 最终兜底
+    }
+
+    // 自动注册未注册的子项目（确保 projects/*.yaml 存在，避免展开时 projectRoot 缺失）
+    const projectsDir = join(specBase, 'projects')
+    for (const pName of projectNames) {
+      const projYaml = join(projectsDir, `${pName}.yaml`)
+      if (!existsSync(projYaml)) {
+        mkdirSync(projectsDir, { recursive: true })
+        // 子项目路径推测：检查 cwd 下是否有同名目录
+        const candidates = [
+          join(cwd, pName),                              // cwd/frontend
+          join(cwd, 'backend', pName),                 // cwd/backend/user-service
+          join(cwd, 'packages', pName),                // monorepo packages
+          join(cwd, 'apps', pName),                     // monorepo apps
+          join(cwd, 'services', pName),                // monorepo services
+        ]
+        const detected = candidates.find(c => existsSync(c))
+        const regPath = detected || join(cwd, pName)
+        writeFileSync(projYaml, `name: ${pName}\npath: ${regPath}\nstatus: active\n`)
+        console.log(`  📝 自动注册子项目: ${pName} → ${regPath}`)
+      }
     }
 
     // 保存到 runtime 供后续使用 + 防重复展开
@@ -1133,6 +1161,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     // 平台模式：scan 完成后生成 manifest.json + post-check
     if (stageName === 'scan' && (platformOpts.specRoot || platformOpts.runtimeRoot)) {
       try {
+        _scanManifestWritten = false // 默认失败
         const { mkdirSync, writeFileSync } = await import('fs')
         const { join } = await import('path')
         const { execSync } = await import('child_process')
@@ -1152,6 +1181,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         const manifestPath = join(manifestDir, 'manifest.json')
         writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
         console.log(`📄 manifest.json 已写入: ${manifestPath}`)
+        _scanManifestWritten = true
         if (!sourceCommit) {
           console.log(`⚠️  source_commit 无法获取（可能非 git 目录），已设为 null`)
         }
@@ -1166,6 +1196,10 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
           cwd,
           specDir: platformOpts.specRoot,
           outputText,
+          scanMeta: {
+            projectListParsed: _scanProjectListParsed,
+            manifestWritten: _scanManifestWritten,
+          },
         })
         printScanPostCheckResult(postResult)
 

@@ -23,9 +23,13 @@ const REQUIRED_SCAN_DOCS = [
  * @param {string} opts.cwd - 源码项目根目录 (source_root)
  * @param {string} opts.specDir - 规范目录 (spec-root)，null 时为非平台模式
  * @param {string} [opts.outputText] - 最后一步（自检）的 AI 输出文本
+ * @param {object} [opts.scanMeta] - scan 元数据（由 runCommand 传入）
+ * @param {boolean} [opts.scanMeta.projectListParsed] - Step 2 项目列表是否成功解析
+ * @param {boolean} [opts.scanMeta.manifestWritten] - manifest.json 是否写入成功
+ * @param {number} [opts.scanMeta.projectCount] - 实际展开的项目数量
  * @returns {{ status: 'success'|'completed_with_warnings'|'failed_post_check', checks: Array<{name, severity, detail}> }}
  */
-export function runScanPostCheck({ cwd, specDir, outputText = '' }) {
+export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {} } ) {
   const isPlatform = !!specDir
   const checks = []
 
@@ -146,7 +150,25 @@ export function runScanPostCheck({ cwd, specDir, outputText = '' }) {
     }
   }
 
-  // 6. 计算 finalStatus
+  // 6. manifest 写入状态检查
+  if (scanMeta.manifestWritten === false) {
+    checks.push({
+      name: 'manifest_write_failed',
+      severity: 'failed',
+      detail: 'manifest.json 写入失败，平台无法消费 scan 结果'
+    })
+  }
+
+  // 7. 项目列表解析状态检查
+  if (scanMeta.projectListParsed === false) {
+    checks.push({
+      name: 'project_list_parse_failed',
+      severity: 'warning',
+      detail: 'Step 2 项目列表解析失败，回退到注册项目列表，可能遗漏子项目'
+    })
+  }
+
+  // 8. 计算 finalStatus
   const hasFailed = checks.some(c => c.severity === 'failed')
   const hasWarning = checks.some(c => c.severity === 'warning')
 
