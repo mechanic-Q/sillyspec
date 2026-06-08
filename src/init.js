@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, statSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import { join, resolve, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { checkbox, confirm, input } from '@inquirer/prompts';
@@ -107,6 +107,14 @@ async function doInstall(projectDir, tools, subprojects = [], specDir = null) {
   // specDir: 规范目录（默认 projectDir/.sillyspec）
   // projectDir: 源码项目根目录（用于工具检测、指令注入、.gitignore）
   const spec = specDir || join(projectDir, '.sillyspec');
+
+  // 外部 specDir 时清理旧版本残留的 cwd/.sillyspec/（防止源码污染）
+  const legacyDir = join(projectDir, '.sillyspec');
+  if (specDir && existsSync(legacyDir)) {
+    try { rmSync(legacyDir, { recursive: true, force: true }) } catch {}
+    if (!existsSync(legacyDir)) console.log('🧹 已清理旧版本残留的源码 .sillyspec/ 目录');
+    else console.error('⚠️ 清理残留 .sillyspec/ 失败');
+  }
 
   // 创建基础目录
   // spec/projects/    → 项目注册表

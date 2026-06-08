@@ -73,8 +73,26 @@ console.log('\n=== Test 1: platform-scan.json 写入位置 ===')
   clean(cwd, sd)
 }
 
-// ── Test 2: --done 不带 --spec-root 时恢复 ──
-console.log('\n=== Test 2: --done 恢复平台参数 ===')
+// ── Test 2: 残留清理：旧版本创建的 cwd/.sillyspec 会被自动删除 ──
+console.log('\n=== Test 2: 旧版本残留清理 ===')
+{
+  const cwd = setup('t2'), sd = spec('t2')
+  // 模拟旧版本创建的残留
+  mkdirSync(join(cwd, '.sillyspec', '.runtime'), { recursive: true })
+  writeFileSync(join(cwd, '.sillyspec', '.runtime', 'old.db'), 'x')
+  mkdirSync(join(cwd, '.sillyspec', 'changes'), { recursive: true })
+  assert(existsSync(join(cwd, '.sillyspec')), `残留存在`)
+  // init 时应清理
+  run(`node "${binCLI}" init "${cwd}" --spec-dir "${sd}"`)
+  assert(!existsSync(join(cwd, '.sillyspec')), `init 清理了 cwd/.sillyspec/`)
+  // run 时也不应再创建
+  run(`node "${binCLI}" --dir "${cwd}" --spec-dir "${sd}" run scan --spec-root "${sd}" --runtime-root "${sd}/runtime" --workspace-id ws --scan-run-id sr 2>&1`)
+  assert(!existsSync(join(cwd, '.sillyspec')), `run 后 cwd/.sillyspec/ 仍不存在`)
+  clean(cwd, sd)
+}
+
+// ── Test 3: --done 不带 --spec-root 时恢复 ──
+console.log('\n=== Test 3: --done 恢复平台参数 ===')
 {
   const cwd = setup('t2'), sd = spec('t2')
   run(`node "${binCLI}" init "${cwd}" --spec-dir "${sd}"`)
@@ -89,7 +107,7 @@ console.log('\n=== Test 2: --done 恢复平台参数 ===')
 // ── Test 3-6: stage-contract 路径（通过 runValidators） ──
 const { runValidators } = await import(pathToFileURL(join(root, 'src', 'stage-contract.js')).href)
 
-console.log('\n=== Test 3: specDir 有文档 → 校验通过 ===')
+console.log('\n=== Test 5: specDir 有文档 → 校验通过 ===')
 {
   const cwd = setup('t3'), sd = spec('t3')
   const proj = basename(cwd)
@@ -100,7 +118,7 @@ console.log('\n=== Test 3: specDir 有文档 → 校验通过 ===')
   clean(cwd, sd)
 }
 
-console.log('\n=== Test 4: specDir 缺文档 → 校验失败，路径不含 .sillyspec ===')
+console.log('\n=== Test 5: specDir 缺文档 → 校验失败，路径不含 .sillyspec ===')
 {
   const cwd = setup('t4'), sd = spec('t4')
   const proj = basename(cwd)
@@ -114,7 +132,7 @@ console.log('\n=== Test 4: specDir 缺文档 → 校验失败，路径不含 .si
   clean(cwd, sd)
 }
 
-console.log('\n=== Test 5: 非平台模式有文档 → 校验通过 ===')
+console.log('\n=== Test 7: 非平台模式有文档 → 校验通过 ===')
 {
   const cwd = setup('t5')
   const proj = basename(cwd)
@@ -124,7 +142,7 @@ console.log('\n=== Test 5: 非平台模式有文档 → 校验通过 ===')
   clean(cwd)
 }
 
-console.log('\n=== Test 6: 非平台模式缺文档 → 路径含 .sillyspec ===')
+console.log('\n=== Test 7: 非平台模式缺文档 → 路径含 .sillyspec ===')
 {
   const cwd = setup('t6')
   const proj = basename(cwd)

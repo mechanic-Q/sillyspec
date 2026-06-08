@@ -5,7 +5,7 @@
  * 支持多变更并行：每个变更状态存储在 sillyspec.db 中。
  */
 import { basename, join, resolve } from 'path'
-import { existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, statSync } from 'fs'
+import { existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, rmSync, statSync } from 'fs'
 import { ProgressManager } from './progress.js'
 
 /**
@@ -139,7 +139,9 @@ async function auditQuickCompletion(cwd, guard, options = {}) {
   return result
 }
 
-async function triggerSync(cwd, changeName) {
+async function triggerSync(cwd, changeName, platformOpts = {}) {
+  // 平台模式（SillyHub）走自己的回传链路，不走 CLI 内置 sync
+  if (platformOpts?.specRoot || platformOpts?.runtimeRoot) return
   try {
     if (changeName && !existsSync(join(cwd, '.sillyspec', 'changes', changeName))) return
     const syncMod = await import('./sync.js')
@@ -154,12 +156,13 @@ async function triggerSync(cwd, changeName) {
  * 审批检查辅助函数：execute 阶段启动前检查
  * @returns {{ status: string, reason?: string } | null}
  */
-async function checkApproval(cwd, changeName) {
+async function checkApproval(cwd, changeName, platformOpts = {}) {
+  // 平台模式不需要 CLI 内置审批检查
+  if (platformOpts?.specRoot || platformOpts?.runtimeRoot) return null
   try {
     const syncMod = await import('./sync.js')
     return await syncMod.checkApproval(changeName, cwd)
   } catch (e) {
-    // sync.js 不存在或检查失败，静默跳过
     return null
   }
 }
@@ -474,7 +477,7 @@ export async function runCommand(args, cwd, specDir = null) {
   // 跨 --done 生命周期：从 metadata 文件恢复 platformOpts
   // 首次 scan 时写入，所有后续调用（包括 run、--done、--skip）都读取
   // 优先在 specDir 下查找，否则回退到 cwd/.sillyspec/.runtime/
-  const specRoot = platformOpts.specRoot || resolveSpecDir(cwd)
+  let specRoot = platformOpts.specRoot || resolveSpecDir(cwd)
   // 平台参数恢复策略：
   // 1. 优先检查 cwd/.sillyspec-platform.json（轻量指针文件，不污染 .sillyspec 结构）
   // 2. 然后检查 specRoot/.runtime/platform-scan.json（首次 scan 写入）
@@ -499,6 +502,8 @@ export async function runCommand(args, cwd, specDir = null) {
           console.error('   解决：重新运行首次 scan 并传入 --spec-root')
           process.exit(1)
         }
+        // 恢复成功：更新 specRoot（初始值可能是 cwd/.sillyspec，恢复后应为真实 specDir）
+        specRoot = platformOpts.specRoot || specRoot
       } catch (e) {
         console.error(`❌ 平台模式参数文件读取失败: ${platformOptsFile}`)
         console.error(`   错误: ${e.message}`)
@@ -538,6 +543,14 @@ export async function runCommand(args, cwd, specDir = null) {
   // 统一规范基路径：平台模式用 specRoot，本地模式用 cwd/.sillyspec
   // runCommand 后续所有 .sillyspec/ 操作必须用 specBase
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
+
+  // 平台模式：清理旧版本残留的 cwd/.sillyspec/（防止源码污染）
+  if (platformOpts.specRoot) {
+    const legacyDir = join(cwd, '.sillyspec')
+    if (existsSync(legacyDir)) {
+      try { rmSync(legacyDir, { recursive: true, force: true }) } catch {}
+    }
+  }
 
   // 解析 --output
   let outputText = null
@@ -650,7 +663,7 @@ export async function runCommand(args, cwd, specDir = null) {
   const changed = await ensureStageSteps(progress, stageName, cwd, specRoot)
   if (changed && effectiveChange) {
     await pm._write(cwd, progress, effectiveChange)
-    triggerSync(cwd, effectiveChange)
+    triggerSync(cwd, effectiveChange, platformOpts)
     progress = await pm.read(cwd, effectiveChange) || progress
   }
 
@@ -700,7 +713,7 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
 
   // execute 阶段启动前检查审批
   if (stageName === 'execute' && !skipApproval) {
-    const approval = await checkApproval(cwd, changeName)
+    const approval = await checkApproval(cwd, changeName, platformOpts)
     if (approval) {
       if (approval.status === 'rejected') {
         console.error(`❌ 变更 ${changeName} 的执行已被拒绝：${approval.reason || '无原因'}`)
@@ -717,7 +730,7 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
   if (autoDetectChange(progress, cwd)) {
     progress.lastActive = new Date().toLocaleString('zh-CN', { hour12: false })
     await pm._write(cwd, progress, changeName)
-    triggerSync(cwd, changeName)
+    triggerSync(cwd, changeName, platformOpts)
   }
 
   const stageData = progress.stages[stageName]
@@ -731,7 +744,7 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
     progress.currentStage = stageName
     progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
     await pm._write(cwd, progress, changeName)
-    triggerSync(cwd, changeName)
+    triggerSync(cwd, changeName, platformOpts)
   }
 
   const steps = stageData.steps
@@ -747,7 +760,7 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
     stageData.startedAt = new Date().toLocaleString('zh-CN', { hour12: false })
     stageData.completedAt = null
     await pm._write(cwd, progress, changeName)
-    triggerSync(cwd, changeName)
+    triggerSync(cwd, changeName, platformOpts)
     currentIdx = 0
     console.log(`🔄 ${stageName} 阶段已自动重置，重新开始。\n`)
   }
@@ -1007,10 +1020,27 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     // 解析项目列表：从 step 2 输出提取，或回退读取 projects/*.yaml
     let projectNames = []
     if (outputText) {
-      // 匹配 "1. project-name" 格式
-      const matches = outputText.match(/^\s*\d+\.\s+(\S+)/gm)
-      if (matches) {
-        projectNames = matches.map(m => m.replace(/^\s*\d+\.\s+/, '').replace(/[—\-:].*$/, '').trim())
+      // 匹配方式 1: "1. project-name" 编号列表
+      const numbered = outputText.match(/^\s*\d+\.\s+(\S+)/gm)
+      if (numbered) {
+        projectNames = numbered.map(m => m.replace(/^\s*\d+\.\s+/, '').replace(/[—\-:].*$/, '').trim())
+      }
+      // 匹配方式 2: 括号枚举 "子项目frontend/order-service/user-service" 或 "项目: a, b, c"
+      if (projectNames.length === 0) {
+        const parenMatch = outputText.match(/(?:子项目|项目)[\s:：]*(\S+(?:[\/、,，]+\S+)*)/)
+        if (parenMatch) {
+          projectNames = parenMatch[1]
+            .split(/[\/、,，]+/)
+            .map(s => s.trim())
+            .filter(Boolean)
+        }
+      }
+      // 匹配方式 3: 结构化 YAML block "scan_projects:\n  - id: name"
+      if (projectNames.length === 0) {
+        const yamlMatch = outputText.match(/scan_projects:\s*\n((?:\s+-\s+id:\s+\S+\s*\n?)+)/)
+        if (yamlMatch) {
+          projectNames = [...yamlMatch[1].matchAll(/-\s+id:\s*(\S+)/g)].map(m => m[1])
+        }
       }
     }
     if (projectNames.length === 0) {
@@ -1091,7 +1121,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
     stageData.completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
     progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
     await pm._write(cwd, progress, changeName)
-    triggerSync(cwd, changeName)
+    triggerSync(cwd, changeName, platformOpts)
 
     // Append to user-inputs.md
     if (outputText) {
@@ -1127,7 +1157,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         }
         // 清理平台参数临时文件
         const { unlinkSync } = await import('fs')
-        const platformOptsFile = join(specRoot, '.runtime', 'platform-scan.json')
+        const platformOptsFile = join(manifestDir, '.runtime', 'platform-scan.json')
         try { unlinkSync(platformOptsFile) } catch {}
 
         // CLI 层 post-check（替代旧的简单检查）
@@ -1269,7 +1299,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
 
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
   await pm._write(cwd, progress, changeName)
-  triggerSync(cwd, changeName)
+  triggerSync(cwd, changeName, platformOpts)
 
   // Append to user-inputs.md
   if (outputText) {
@@ -1389,7 +1419,7 @@ async function skipStep(pm, progress, stageName, cwd, changeName) {
   steps[currentIdx].skippedAt = new Date().toLocaleString('zh-CN',{hour12:false})
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
   await pm._write(cwd, progress, changeName)
-  triggerSync(cwd, changeName)
+  triggerSync(cwd, changeName, platformOpts)
 
   console.log(`⏭️ Step ${currentIdx + 1}/${steps.length} 已跳过：${steps[currentIdx].name}`)
 
@@ -1452,7 +1482,7 @@ async function resetStage(pm, progress, stageName, cwd, changeName) {
   }
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
   await pm._write(cwd, progress, changeName)
-  triggerSync(cwd, changeName)
+  triggerSync(cwd, changeName, platformOpts)
   console.log(`🔄 ${stageName} 阶段已重置`)
 }
 
@@ -1478,7 +1508,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
     const changed = await ensureStageSteps(progress, stage, cwd)
     if (stageChanged || changed) {
       await pm._write(cwd, progress, changeName)
-      triggerSync(cwd, changeName)
+      triggerSync(cwd, changeName, platformOpts)
     }
     progress = await pm.read(cwd, changeName)
     return progress
@@ -1529,7 +1559,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
     }
     // execute 阶段启动前检查审批
     if (currentStage === 'execute' && !skipApproval) {
-      const approval = await checkApproval(cwd, changeName)
+      const approval = await checkApproval(cwd, changeName, platformOpts)
       if (approval) {
         if (approval.status === 'rejected') {
           console.error(`❌ 变更 ${changeName} 的执行已被拒绝：${approval.reason || '无原因'}`)
@@ -1559,7 +1589,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
     const defSteps = await getStageSteps(currentStage, cwd, progress)
     // execute 阶段启动前检查审批
     if (currentStage === 'execute' && !skipApproval) {
-      const approval = await checkApproval(cwd, changeName)
+      const approval = await checkApproval(cwd, changeName, platformOpts)
       if (approval) {
         if (approval.status === 'rejected') {
           console.error(`❌ 变更 ${changeName} 的执行已被拒绝：${approval.reason || '无原因'}`)
@@ -1592,7 +1622,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
   await ensureStageSteps(progress, next, cwd)
   await pm._write(cwd, progress, changeName)
-  triggerSync(cwd, changeName)
+  triggerSync(cwd, changeName, platformOpts)
   progress = await pm.read(cwd, changeName)
 
   console.log(`\n${currentStage} complete. Auto advanced to ${next}.`)
@@ -1601,7 +1631,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName) {
   if (firstPending !== -1) {
     // execute 阶段启动前检查审批
     if (next === 'execute' && !skipApproval) {
-      const approval = await checkApproval(cwd, changeName)
+      const approval = await checkApproval(cwd, changeName, platformOpts)
       if (approval) {
         if (approval.status === 'rejected') {
           console.error(`❌ 变更 ${changeName} 的执行已被拒绝：${approval.reason || '无原因'}`)
