@@ -52,19 +52,33 @@ export function runScanPostCheck({ cwd, specDir, outputText = '', scanMeta = {} 
 
   const projectName = basename(cwd)
 
-  // 1. source_root 污染检查
-  const localDocsDir = join(cwd, '.sillyspec', 'docs')
-  if (existsSync(localDocsDir)) {
-    try {
-      const leaked = readdirSync(localDocsDir, { recursive: true }).filter(e => String(e).endsWith('.md'))
-      if (leaked.length > 0) {
-        checks.push({
-          name: 'source_root_docs_leak',
-          severity: 'failed',
-          detail: `source_root 下存在 ${leaked.length} 个文档文件（${localDocsDir}/），agent 可能写入到了错误路径`
-        })
-      }
-    } catch {}
+  // 1. source_root 污染检查（docs/projects/workflows/knowledge/manifest/local）
+  const pollutePaths = ['docs', 'projects', 'workflows', 'knowledge']
+  const polluteFiles = ['manifest.json', 'local.yaml']
+  for (const sub of pollutePaths) {
+    const localSub = join(cwd, '.sillyspec', sub)
+    if (existsSync(localSub)) {
+      try {
+        const leaked = readdirSync(localSub, { recursive: true }).filter(e => String(e).endsWith('.md') || String(e).endsWith('.yaml') || String(e).endsWith('.json'))
+        if (leaked.length > 0) {
+          checks.push({
+            name: 'source_root_leak',
+            severity: 'failed',
+            detail: `source_root/.sillyspec/${sub}/ 下存在 ${leaked.length} 个文件（${localSub}/），agent 写入到了错误路径`
+          })
+        }
+      } catch {}
+    }
+  }
+  for (const file of polluteFiles) {
+    const filePath = join(cwd, '.sillyspec', file)
+    if (existsSync(filePath)) {
+      checks.push({
+        name: 'source_root_leak',
+        severity: 'failed',
+        detail: `source_root/.sillyspec/${file} 存在，agent 写入到了错误路径（${filePath}）`
+      })
+    }
   }
 
   // 2. spec_root 检查 7 份必需文档

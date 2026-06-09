@@ -22,8 +22,8 @@ export const definition = {
 9. 根据任务描述初步判断可能涉及的模块
 10. 读取匹配到的 \`.sillyspec/docs/<project>/modules/<module>.md\`
 
-### 创建任务记录（必须执行）
-理解完任务后，立即创建记录文件：
+### 创建任务记录（⛔ 此步骤不能跳过，没有 quicklog 记录 = 未完成）
+理解完任务后，**必须**立即创建记录文件，再输出任何其他内容：
 1. 使用预注入的 git 用户名：\`<git-user>\`
 2. 无 \`--change\`：创建 .sillyspec/quicklog/QUICKLOG-\`<git-user>\`.md\`（已存在则追加），写入：
    \`\`\`
@@ -41,7 +41,9 @@ export const definition = {
 这样 Gate 检测到 .sillyspec/\` 下有变更，就不会拦截后续的代码修改。
 
 ### 输出
-任务理解 + 上下文摘要 + quicklog 已创建`,
+quicklog 已创建（必须放在输出的第一行确认）+ 任务理解 + 上下文摘要
+
+⚠️ **先创建 quicklog，再输出任务理解。** 如果 quicklog 未创建，CLI post-check 会报 warning。`,
       outputHint: '任务理解',
       optional: false
     },

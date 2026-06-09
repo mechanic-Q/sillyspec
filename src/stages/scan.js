@@ -103,13 +103,13 @@ export const definition = {
     {
       name: '深度扫描 — 7 份文档（子代理并行）',
       perProject: true,
-      prompt: `按照 \`.sillyspec/workflows/scan-docs.yaml\` 中定义的角色和检查规则，使用子代理并行生成当前项目的 7 份扫描文档。
+      prompt: `按照 \`{WORKFLOWS_ROOT}/scan-docs.yaml\` 中定义的角色和检查规则，使用子代理并行生成当前项目的 7 份扫描文档。
 
 **你必须使用子代理执行，不要自己写文档。**
 **对扫描列表中的每个项目分别执行以下流程。**
 
 ### 操作
-1. 读取 \`.sillyspec/workflows/scan-docs.yaml\`，了解角色定义、输出要求和检查规则
+1. 读取 \`{WORKFLOWS_ROOT}/scan-docs.yaml\`，了解角色定义、输出要求和检查规则
 2. 对每个项目（扫描列表中标记为需生成/覆盖的项目）：
    a. 将 \`<project>\` 替换为实际项目名，得到该项目的目标文件路径
    b. 为每个角色启动独立子代理（可并行），每个子代理负责 1-2 份文档
@@ -141,16 +141,16 @@ export const definition = {
     },
     {
       name: '生成本地配置',
-      prompt: `自动生成 .sillyspec/local.yaml 本地配置文件。
+      prompt: `自动生成 local.yaml 本地配置文件。
 
 ### 操作
-1. 检查 .sillyspec/local.yaml 是否已存在，已存在则跳过（提示"local.yaml 已存在，跳过生成"）
+1. 检查 {SPEC_ROOT}/local.yaml 是否已存在，已存在则跳过（提示"local.yaml 已存在，跳过生成"）
 2. 根据项目类型生成默认配置：
    - **Node.js**（有 package.json）：build: "npm run build", test: "npm test", lint: "npm run lint", type: nodejs
    - **Maven**（有 pom.xml）：build: "mvn compile", test: "mvn test", lint: "mvn checkstyle:check", type: maven
    - **Gradle**（有 build.gradle）：build: "./gradlew build", test: "./gradlew test", type: gradle
    - **通用项目**：只写注释模板, type: generic
-3. 确保目录存在：mkdir -p .sillyspec
+3. 确保目录存在：mkdir -p {SPEC_ROOT}
 4. 原子写入（先写 tmp 文件再 rename）
 
 ### 文件格式
@@ -454,7 +454,7 @@ step1 → step2 → step3
 3. 自检门控：ARCHITECTURE（技术栈+Schema摘要）、CONVENTIONS（隐形规则+代码风格）、STRUCTURE（目录结构）、INTEGRATIONS（外部依赖）、TESTING（测试现状）、CONCERNS（技术债务）、PROJECT（项目概览）
 4. 检查 flows/ 和 glossary.md 是否已生成（如有）
 5. 清理：\`rm -f {DOCS_ROOT}/scan/_env-detect.md\`
-6. \`git add .sillyspec/\` — 暂存扫描结果（不要 commit，由用户通过统一提交工具处理）
+6. 如果非平台模式：\`git add .sillyspec/\` — 暂存扫描结果（不要 commit，由用户通过统一提交工具处理）。如果平台模式：跳过 git add（specRoot 不在 sourceRoot 的 git repo 内）。
 
 ### ⛔ 路径合规检查（平台模式下必须执行）
 7. 确认所有文档都写入 \`{DOCS_ROOT}/\`（spec-root 下），**而非源码目录下的 .sillyspec/**

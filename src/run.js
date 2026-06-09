@@ -10,6 +10,24 @@ import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
 import { ProgressManager } from './progress.js'
 
+/**
+ * 在容器/Docker 环境下，git 可能因目录所有权不匹配报 dubious ownership。
+ * 使用 -c safe.directory= 临时参数，不污染全局 git config。
+ * @param {string} cwd - 仓库根目录
+ * @param {string[]} args - git 子命令及参数，如 ['rev-parse', 'HEAD']
+ * @returns {{ value: string, error: string|null }}
+ */
+function safeGit(cwd, args) {
+  const { execSync } = require('child_process')
+  const fullArgs = ['-c', `safe.directory=${cwd}`, '-C', cwd, ...args]
+  try {
+    const value = execSync(['git', ...fullArgs].join(' '), { encoding: 'utf8', timeout: 5000 }).trim()
+    return { value, error: null }
+  } catch (e) {
+    return { value: null, error: e.message.split('\n')[0] }
+  }
+}
+
 // ── Wait State Constants ──
 // 正则匹配：只识别独立一行的标记，避免误伤文档正文引用
 const WAIT_MARKER_RE = /^\s*\[(WAIT_FOR_USER|NEEDS_CONFIRM|NEEDS_DECISION)\]\s*$/m
@@ -128,6 +146,21 @@ async function auditQuickCompletion(cwd, guard, options = {}) {
     } else if (result.newFiles.length > 0 || (allowedFiles.length > 0 && result.reasons.some(r => r.startsWith('超出')))) {
       result.status = 'warning'
     }
+
+    // quicklog 存在性检查
+    try {
+      const quicklogDir = join(cwd, '.sillyspec', 'quicklog')
+      if (existsSync(quicklogDir)) {
+        const qlFiles = readdirSync(quicklogDir).filter(f => f.endsWith('.md'))
+        if (qlFiles.length === 0) {
+          result.reasons.push('quicklog 目录为空（无任务记录）')
+          if (result.status === 'safe') result.status = 'warning'
+        }
+      } else {
+        result.reasons.push('quicklog 目录不存在（agent 未创建任务记录）')
+        if (result.status === 'safe') result.status = 'warning'
+      }
+    } catch {}
 
     // --confirm 模式：展示 diff 并等待确认
     if (isConfirm && (result.status === 'warning' || result.status === 'blocked')) {
@@ -351,7 +384,7 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
   if (promptText.includes('<git-user>')) {
     const { execSync } = await import('child_process')
     try {
-      const gitUser = execSync('git config user.name', { cwd, encoding: 'utf8', timeout: 5000 }).trim()
+      const gitUser = safeGit(cwd, ['config', 'user.name']).value || 'unknown'
       promptText = promptText.replace(/<git-user>/g, gitUser)
     } catch {
       promptText = promptText.replace(/<git-user>/g, 'unknown')
@@ -377,9 +410,14 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
     const docsRoot = join(specSillyspec, 'docs', projectName)
     const projectsRoot = join(specSillyspec, 'projects')
     const changesRoot = join(specSillyspec, 'changes')
+    const workflowsRoot = join(specSillyspec, 'workflows')
+    const knowledgeRoot = join(specSillyspec, 'knowledge')
 
     promptText = promptText.replace(/\{DOCS_ROOT\}/g, docsRoot)
     promptText = promptText.replace(/\{PROJECTS_ROOT\}/g, projectsRoot)
+    promptText = promptText.replace(/\{WORKFLOWS_ROOT\}/g, workflowsRoot)
+    promptText = promptText.replace(/\{KNOWLEDGE_ROOT\}/g, knowledgeRoot)
+    promptText = promptText.replace(/\{SPEC_ROOT\}/g, specSillyspec)
 
     const platformDirectives = []
     platformDirectives.push(
@@ -389,6 +427,8 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
       `- 文档根目录: \`${docsRoot}/\`\n` +
       `- 项目注册表: \`${projectsRoot}/\`\n` +
       `- 变更目录: \`${changesRoot}/\`\n` +
+      `- 工作流目录: \`${workflowsRoot}/\`\n` +
+      `- 术语目录: \`${knowledgeRoot}/\`\n` +
       `\n` +
       `### ⛔ 写入规则\n` +
       `1. **所有文档、配置、产物只能写入上述路径**。严禁写入源码目录或相对路径 \`.sillyspec/\`。\n` +
@@ -437,8 +477,25 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
       const specSillyspec = join(cwd, '.sillyspec')
       const docsRoot = join(specSillyspec, 'docs', projectName)
       const projectsRoot = join(specSillyspec, 'projects')
+      const workflowsRoot = join(specSillyspec, 'workflows')
+      const knowledgeRoot = join(specSillyspec, 'knowledge')
       promptText = promptText.replace(/\{DOCS_ROOT\}/g, docsRoot)
       promptText = promptText.replace(/\{PROJECTS_ROOT\}/g, projectsRoot)
+      promptText = promptText.replace(/\{WORKFLOWS_ROOT\}/g, workflowsRoot)
+      promptText = promptText.replace(/\{KNOWLEDGE_ROOT\}/g, knowledgeRoot)
+      promptText = promptText.replace(/\{SPEC_ROOT\}/g, specSillyspec)
+    }
+  }
+
+  // 平台模式 prompt 自检：确保没有裸相对输出路径
+  // 只匹配正向写入指令中的裸路径，避免误杀「禁止写入 .sillyspec/」等安全说明
+  if ((platformOpts?.specRoot || platformOpts?.runtimeRoot) && stageName === 'scan') {
+    const writeCtx = /(?<!不要|禁止|严禁)(?:save[\s.]+to|write|create|mkdir|git add|写入|保存到|写入到)[^a-zA-Z]*\.sillyspec\/[a-z]/i
+    if (writeCtx.test(promptText)) {
+      console.error(`❌ [sillyspec] BUG: 平台模式 scan prompt 包含写入指令指向裸相对路径 .sillyspec/`)
+      console.error(`   这会导致 agent 写入源码目录而非 spec-root，属于源码污染 bug。`)
+      console.error(`   请将路径改为对应的 {DOCS_ROOT}/{PROJECTS_ROOT}/{WORKFLOWS_ROOT}/{KNOWLEDGE_ROOT}/{SPEC_ROOT} 占位符。`)
+      process.exit(1)
     }
   }
 
@@ -651,7 +708,7 @@ async function executeScanPostcheck(cwd, platformOpts, scanProfile) {
       const manifestDir = platformOpts.specRoot
       let sourceCommit = null
       try {
-        sourceCommit = execSync('git rev-parse HEAD', { cwd, encoding: 'utf8', timeout: 5000 }).trim()
+        const { value: sourceCommit, error: scErr } = safeGit(cwd, ['rev-parse', 'HEAD'])
       } catch {}
       mkdirSync(manifestDir, { recursive: true })
       const manifest = {
@@ -665,6 +722,7 @@ async function executeScanPostcheck(cwd, platformOpts, scanProfile) {
         workspace_id: platformOpts.workspaceId || null,
         scan_run_id: platformOpts.scanRunId || null,
         source_commit: sourceCommit,
+        source_commit_error: sourceCommit === null ? (scErr || 'unknown') : undefined,
         generated_at: new Date().toISOString(),
         schema_version: 2,
       }
@@ -1074,7 +1132,7 @@ async function runStage(pm, progress, stageName, cwd, changeName, skipApproval =
       const allowNew = quickOpts?.isAllowNew || false
       const forceBaseline = quickOpts?.isForceBaseline || false
       progress.quickGuard = {
-        baselineCommit: execSync('git rev-parse HEAD', { cwd, encoding: 'utf8', timeout: 5000 }).trim(),
+        baselineCommit: safeGit(cwd, ['rev-parse', 'HEAD']).value,
         baselineFiles,
         allowedFiles,
         allowNew,
@@ -1668,12 +1726,13 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         mkdirSync(manifestDir, { recursive: true })
         let sourceCommit = null
         try {
-          sourceCommit = execSync('git rev-parse HEAD', { cwd, encoding: 'utf8', timeout: 5000 }).trim()
+          const { value: sourceCommit, error: scErr } = safeGit(cwd, ['rev-parse', 'HEAD'])
         } catch {}
         const manifest = {
           workspace_id: platformOpts.workspaceId || null,
           scan_run_id: platformOpts.scanRunId || null,
           source_commit: sourceCommit,
+          source_commit_error: sourceCommit === null ? (scErr || 'unknown') : undefined,
           generated_at: new Date().toISOString(),
           schema_version: 1,
         }
