@@ -65,6 +65,160 @@ import { buildPlanSteps } from './stages/plan.js'
 import { formatExecuteSummary } from './worktree-apply.js'
 
 /**
+ * 从 _module-map.yaml 读取模块上下文索引
+ * 用于 brainstorm/plan/execute 阶段按任务命中模块精准注入上下文
+ *
+ * @param {string} specBase - 规范目录（.sillyspec 或 specRoot）
+ * @param {string} projectName - 项目名
+ * @returns {object|null} 解析后的模块索引，null 表示无索引
+ */
+function loadModuleContextIndex(specBase, projectName) {
+  try {
+    const { existsSync, readFileSync } = require('fs')
+    const { join } = require('path')
+    const mapPath = join(specBase, 'docs', projectName, 'modules', '_module-map.yaml')
+    if (!existsSync(mapPath)) return null
+    const content = readFileSync(mapPath, 'utf8')
+    return parseModuleMapSimple(content)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 根据 AI 输出的任务描述，匹配相关模块并生成上下文注入文本
+ * 匹配策略：模块 id / role / doc 路径中的关键词
+ *
+ * @param {string} taskDescription - 任务描述（来自 plan.md / step prompt / outputText）
+ * @param {object} moduleIndex - loadModuleContextIndex 返回值
+ * @param {string} specBase - 规范目录
+ * @param {string} projectName - 项目名
+ * @returns {string} 上下文注入文本，空字符串表示无匹配模块
+ */
+const MAX_MODULE_CONTEXT_CHARS = 4096  // 上下文注入硬限制（字节），防止 prompt 膨胀
+const MAX_MODULES_PER_INJECTION = 3   // 最多注入的模块数
+const MAX_FILES_PER_MODULE = 8        // 每个模块最多展示的文件数
+
+function buildModuleContextInjection(taskDescription, moduleIndex, specBase, projectName) {
+  if (!moduleIndex || !taskDescription) return ''
+  const { existsSync } = require('fs')
+  const { join } = require('path')
+
+  const taskLower = taskDescription.toLowerCase()
+  const matched = []
+
+  for (const [moduleId, data] of Object.entries(moduleIndex)) {
+    let score = 0
+    let matchReasons = []
+    // 模块 id 匹配
+    if (taskLower.includes(moduleId.toLowerCase())) { score += 3; matchReasons.push(`id:${moduleId}`) }
+    // role 描述匹配
+    if (data.role && taskLower.includes(data.role.toLowerCase())) { score += 2; matchReasons.push('role') }
+    // core_files 路径匹配
+    const coreFiles = data.paths || data.core_files || []
+    for (const p of coreFiles) {
+      if (taskLower.includes(p.toLowerCase())) { score += 1; matchReasons.push(`file:${p}`); break }  // 文件匹配只计一次
+    }
+    if (score > 0) matched.push({ moduleId, data, score, matchReasons })
+  }
+
+  if (matched.length === 0) return ''
+
+  matched.sort((a, b) => b.score - a.score)
+  const top = matched.slice(0, MAX_MODULES_PER_INJECTION)
+
+  let injection = '\n### 📦 模块上下文（按相关性排序，来自 Module Context Index）\n\n'
+  injection += `> 以下模块上下文由 scan 阶段生成的 _module-map.yaml 自动匹配。\n`
+  injection += `> Matched modules: ${top.map(m => m.moduleId).join(', ')}\n`
+  injection += `> Reasons: ${top.map(m => m.matchReasons.join(', ')).join('; ')}\n\n`
+
+  for (const { moduleId, data } of top) {
+    injection += `#### ${moduleId}\n`
+    if (data.role) injection += `- **职责**: ${String(data.role).slice(0, 100)}\n`
+    const riskLevel = data.risk_level || 'medium'
+    injection += `- **风险等级**: ${riskLevel}\n`
+    const coreFiles = (data.paths || data.core_files || []).slice(0, MAX_FILES_PER_MODULE)
+    if (coreFiles.length > 0) injection += `- **核心文件**: ${coreFiles.join(', ')}\n`
+    if (data.doc) {
+      const docPath = join(specBase, 'docs', projectName, data.doc)
+      const exists = existsSync(docPath)
+      injection += `- **模块文档**: ${data.doc}${exists ? ' ✅' : ' ⚠️ 不存在'}\n`
+    }
+    const deps = data.depends_on || []
+    if (deps.length > 0) injection += `- **依赖**: ${deps.slice(0, 5).join(', ')}\n`
+    const usedBy = data.used_by || []
+    if (usedBy.length > 0) injection += `- **被引用**: ${usedBy.slice(0, 5).join(', ')}\n`
+    injection += '\n'
+
+    // 长度硬限制：超过阈值截断
+    if (injection.length > MAX_MODULE_CONTEXT_CHARS) {
+      injection += `<!-- Module context truncated: exceeded ${MAX_MODULE_CONTEXT_CHARS} chars -->\n`
+      break
+    }
+  }
+
+  return injection
+}
+
+// 复用 modules.js 的简单 YAML 解析（避免循环依赖）
+function parseModuleMapSimple(content) {
+  const modules = {}
+  let currentModule = null
+  let currentKey = null
+  let currentArray = null
+
+  for (const line of content.split('\n')) {
+    const moduleMatch = line.match(/^  ([a-zA-Z0-9_-]+):$/)
+    if (moduleMatch) {
+      if (currentArray && currentModule && currentKey) {
+        modules[currentModule][currentKey] = currentArray
+      }
+      currentModule = moduleMatch[1]
+      modules[currentModule] = {}
+      currentKey = null
+      currentArray = null
+      continue
+    }
+    if (!currentModule) continue
+
+    const arrayFieldMatch = line.match(/^    (depends_on|used_by|paths|tags|aliases|entrypoints|main_symbols|review_reasons|core_files|test_files|related_docs|verify_commands):$/)
+    if (arrayFieldMatch) {
+      if (currentArray && currentKey) modules[currentModule][currentKey] = currentArray
+      currentKey = arrayFieldMatch[1]
+      currentArray = []
+      continue
+    }
+
+    const inlineArrayMatch = line.match(/^    (depends_on|used_by|paths|tags|aliases|entrypoints|main_symbols|review_reasons|core_files|test_files|related_docs|verify_commands): \[(.*)\]$/)
+    if (inlineArrayMatch) {
+      if (currentArray && currentKey) modules[currentModule][currentKey] = currentArray
+      const vals = inlineArrayMatch[2].split(',').map(v => v.trim()).filter(Boolean)
+      modules[currentModule][inlineArrayMatch[1]] = vals
+      currentKey = null
+      currentArray = null
+      continue
+    }
+
+    const scalarMatch = line.match(/^    (status|doc|needs_review|role|risk_level): (.+)$/)
+    if (scalarMatch) {
+      if (currentArray && currentKey) { modules[currentModule][currentKey] = currentArray; currentArray = null; currentKey = null }
+      modules[currentModule][scalarMatch[1]] = scalarMatch[2]
+      continue
+    }
+
+    const itemMatch = line.match(/^      - (.+)$/)
+    if (itemMatch && currentArray !== null) {
+      currentArray.push(itemMatch[1].trim())
+      continue
+    }
+  }
+  if (currentArray && currentModule && currentKey) {
+    modules[currentModule][currentKey] = currentArray
+  }
+  return modules
+}
+
+/**
  * 同步触发辅助函数：_write 后 best-effort 同步到平台
  */
 /**
@@ -484,6 +638,19 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
       promptText = promptText.replace(/\{WORKFLOWS_ROOT\}/g, workflowsRoot)
       promptText = promptText.replace(/\{KNOWLEDGE_ROOT\}/g, knowledgeRoot)
       promptText = promptText.replace(/\{SPEC_ROOT\}/g, specSillyspec)
+    }
+  }
+
+  // 注入模块上下文（brainstorm/plan/execute 阶段，基于 Module Context Index）
+  if (['brainstorm', 'plan', 'execute'].includes(stageName) && projectName) {
+    const moduleIndex = loadModuleContextIndex(specBase || join(cwd, '.sillyspec'), projectName)
+    if (moduleIndex && Object.keys(moduleIndex).length > 0) {
+      // 尝试从 step prompt / changeName 匹配模块
+      const taskDesc = step.prompt || changeName || ''
+      const injection = buildModuleContextInjection(taskDesc, moduleIndex, specBase || join(cwd, '.sillyspec'), projectName)
+      if (injection) {
+        promptText = injection + '\n' + promptText
+      }
     }
   }
 
@@ -1749,7 +1916,7 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
         try { unlinkSync(platformOptsFile) } catch {}
 
         // CLI 层 post-check（替代旧的简单检查）
-        const { runScanPostCheck, printScanPostCheckResult } = await import('./scan-postcheck.js')
+        const { runScanPostCheck, printScanPostCheckResult, formatStructuredResult, writeStructuredResult } = await import('./scan-postcheck.js')
         const postResult = runScanPostCheck({
           cwd,
           specDir: platformOpts.specRoot,
@@ -1760,6 +1927,22 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
           },
         })
         printScanPostCheckResult(postResult)
+
+        // 生成结构化 JSON 并写入 runtime（供 SillyHub 消费）
+        const structured = formatStructuredResult(postResult, {
+          workspace_id: platformOpts.workspaceId,
+          scan_run_id: platformOpts.scanRunId,
+          source_root: cwd,
+          spec_root: platformOpts.specRoot,
+          runtime_root: platformOpts.runtimeRoot,
+        })
+        const postcheckJsonPath = writeStructuredResult(structured, platformOpts.specRoot, {
+          runtimeRoot: platformOpts.runtimeRoot,
+          scanRunId: platformOpts.scanRunId,
+        })
+        if (postcheckJsonPath) {
+          console.log(`📄 postcheck-result.json 已写入: ${postcheckJsonPath}`)
+        }
 
         // 将 post-check 结果写入 manifest
         manifest.scan_post_check = {
@@ -1788,11 +1971,17 @@ async function completeStep(pm, progress, stageName, cwd, outputText, inputText 
       }
     }
 
-    // 非 platform 模式 scan 也做轻量 post-check
+    // 非 platform 模式 scan 也做轻量 post-check + 结构化输出
     if (stageName === 'scan' && !platformOpts.specRoot && !platformOpts.runtimeRoot) {
-      const { runScanPostCheck, printScanPostCheckResult } = await import('./scan-postcheck.js')
+      const { runScanPostCheck, printScanPostCheckResult, formatStructuredResult, writeStructuredResult } = await import('./scan-postcheck.js')
       const postResult = runScanPostCheck({ cwd, specDir: null, outputText })
       printScanPostCheckResult(postResult)
+      // 结构化结果写入 .sillyspec/.runtime/
+      const structured = formatStructuredResult(postResult, { source_root: cwd })
+      const postcheckJsonPath = writeStructuredResult(structured, join(cwd, '.sillyspec'))
+      if (postcheckJsonPath) {
+        console.log(`📄 postcheck-result.json 已写入: ${postcheckJsonPath}`)
+      }
     }
 
     validateMetadata(cwd, stageName, specBase)

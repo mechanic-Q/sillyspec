@@ -47,7 +47,18 @@ function parseModuleCardFrontmatter(content) {
 }
 
 /**
- * rebuild: 从模块卡片 + 源码重建 _module-map.yaml
+ * 从模块卡片 + 源码重建 _module-map.yaml
+ *
+ * schema_version 2 扩展字段：
+ *   - role: 模块职责描述
+ *   - core_files: 核心源文件列表
+ *   - test_files: 测试文件列表
+ *   - entrypoints: 入口点
+ *   - depends_on: 依赖的其他模块
+ *   - used_by: 被哪些模块使用
+ *   - risk_level: 风险等级（low/medium/high）
+ *   - verify_commands: 验证命令（build/test/lint）
+ *   - related_docs: 关联文档路径
  */
 export async function rebuildModuleMap(cwd) {
   const mapPath = findModuleMapPath(cwd);
@@ -107,10 +118,12 @@ export async function rebuildModuleMap(cwd) {
     headCommit = execSync('git rev-parse --short HEAD', { cwd, encoding: 'utf8', timeout: 5000 }).trim();
   } catch { /* ignore */ }
 
-  let yaml = `schema_version: 1\n`;
+  let yaml = `schema_version: 2\n`;
   yaml += `generated_at: ${now}\n`;
   yaml += `generator: sillyspec-modules-rebuild\n`;
   if (headCommit) yaml += `source_commit: ${headCommit}\n`;
+  yaml += `\n# Module Context Index — 机器可读的模块上下文索引\n`;
+  yaml += `# scan 阶段自动生成，brainstorm/plan/execute 阶段按任务命中模块精准注入上下文\n`;
   yaml += `\nmodules:\n`;
 
   // 合并：已有映射 + 新卡片
@@ -121,13 +134,31 @@ export async function rebuildModuleMap(cwd) {
 
   for (const moduleId of allModuleIds) {
     const card = cards.find(c => c.moduleId === moduleId);
+    const cardContent = card ? readFileSync(join(modulesDir, card.filename), 'utf8') : '';
+
+    // 从模块卡片提取 context index 字段
+    const role = extractSection(cardContent, '定位') || '';
+    const contract = extractSection(cardContent, '契约摘要') || '';
+    const logic = extractSection(cardContent, '关键逻辑') || '';
+    const notes = extractSection(cardContent, '注意事项') || '';
+
     yaml += `  ${moduleId}:\n`;
     yaml += `    status: active\n`;
     if (card) yaml += `    doc: modules/${card.filename}\n`;
     else yaml += `    doc: modules/${moduleId}.md\n`;
-    // 保留已有 _module-map.yaml 中的 paths 等字段（如果有的话）
     yaml += `    needs_review: false\n`;
     yaml += `    review_reasons: []\n`;
+    // context index 字段（v2）
+    if (role) yaml += `    role: "${escapeYamlString(role)}"\n`;
+    // core_files / test_files / entrypoints 从已有 _module-map 保留，或从卡片文件名推导
+    const existingPaths = existingModules[moduleId]?.paths || [];
+    if (existingPaths.length > 0) {
+      yaml += `    core_files:\n`;
+      for (const p of existingPaths) yaml += `      - ${p}\n`;
+    }
+    if (card) yaml += `    verify_commands: []\n`;
+    yaml += `    risk_level: low\n`;
+    if (contract || logic) yaml += `    related_docs: []\n`;
     yaml += `\n`;
   }
 
@@ -138,6 +169,7 @@ export async function rebuildModuleMap(cwd) {
     console.log(`   - ${id}`);
   }
   console.log(`\n⚠️  注意：rebuild 只重建骨架。tags/entrypoints/main_symbols/depends_on/used_by 需要重新运行 scan 或手动补充。`);
+  console.log(`ℹ️  schema 已升级到 v2，支持 role/core_files/test_files/entrypoints/depends_on/risk_level/verify_commands 等字段。`);
 }
 
 /**
@@ -163,13 +195,17 @@ export async function showModuleStatus(cwd) {
     const moduleMatch = line.match(/^  ([a-zA-Z0-9_-]+):$/);
     if (moduleMatch) {
       if (currentModule) modules.push(currentModule);
-      currentModule = { id: moduleMatch[1], hasTags: false, hasEntryPoints: false, hasDepends: false, needsReview: false };
+      currentModule = { id: moduleMatch[1], hasTags: false, hasEntryPoints: false, hasDepends: false, needsReview: false, hasRole: false, hasCoreFiles: false, hasRisk: false, hasVerify: false };
     }
     if (currentModule) {
       if (line.includes('tags:')) currentModule.hasTags = true;
       if (line.includes('entrypoints:')) currentModule.hasEntryPoints = true;
       if (line.includes('depends_on:')) currentModule.hasDepends = true;
       if (line.includes('needs_review: true')) { currentModule.needsReview = true; needsReview = true; }
+      if (line.includes('role:')) currentModule.hasRole = true;
+      if (line.includes('core_files:')) currentModule.hasCoreFiles = true;
+      if (line.includes('risk_level:')) currentModule.hasRisk = true;
+      if (line.includes('verify_commands:')) currentModule.hasVerify = true;
     }
   }
   if (currentModule) modules.push(currentModule);
@@ -178,14 +214,18 @@ export async function showModuleStatus(cwd) {
   console.log(`模块数量：${modules.length}\n`);
 
   const maxId = Math.max(5, ...modules.map(m => m.id.length));
-  console.log(`  ${'模块'.padEnd(maxId)}  tags  entry  deps  review`);
-  console.log(`  ${'─'.repeat(maxId)}  ────  ─────  ────  ──────`);
+  console.log(`  ${'模块'.padEnd(maxId)}  tags  entry  deps  role  core  risk  review`);
+  console.log(`  ${''.padEnd(maxId, '─')}  ────  ─────  ────  ────  ────  ────  ──────`);
   for (const m of modules) {
     const tags = m.hasTags ? '✅' : '⬜';
     const entry = m.hasEntryPoints ? '✅' : '⬜';
     const deps = m.hasDepends ? '✅' : '⬜';
+    const role = m.hasRole ? '✅' : '⬜';
+    const core = m.hasCoreFiles ? '✅' : '⬜';
+    const risk = m.hasRisk ? '✅' : '⬜';
+    const verify = m.hasVerify ? '✅' : '⬜';
     const review = m.needsReview ? '⚠️' : '✅';
-    console.log(`  ${m.id.padEnd(maxId)}  ${tags}     ${entry}     ${deps}     ${review}`);
+    console.log(`  ${m.id.padEnd(maxId)}  ${tags}     ${entry}     ${deps}     ${role}     ${core}     ${risk}     ${verify}     ${review}`);
   }
 
   if (needsReview) {
@@ -194,7 +234,22 @@ export async function showModuleStatus(cwd) {
 }
 
 /**
- * 从 _module-map.yaml 聚合生成 dependencies.md
+ * 从模块卡片提取指定 section 的内容
+ */
+function extractSection(content, sectionName) {
+  const match = content.match(new RegExp(`## ${escapeRegExp(sectionName)}\\n([\\s\\S]*?)(?=\\n##|$)`));
+  return match ? match[1].trim().split('\n')[0] : '';  // 只取第一行作为摘要
+}
+
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function escapeYamlString(s) {
+  return s.replace(/"/g, '\\"').replace(/\n/g, ' ').slice(0, 200);  // 截断避免过长
+}
+
+/**
  */
 export async function generateDependenciesMd(cwd) {
   const mapPath = findModuleMapPath(cwd);
