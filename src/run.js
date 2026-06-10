@@ -1127,7 +1127,7 @@ export async function runCommand(args, cwd, specDir = null) {
 
   // --reset
   if (isReset) {
-    return await resetStage(pm, progress, stageName, cwd, effectiveChange)
+    return await resetStage(pm, progress, stageName, cwd, effectiveChange, platformOpts)
   }
 
   // 确保步骤已初始化
@@ -2262,7 +2262,7 @@ function showStatus(progress, stageName) {
   })
 }
 
-async function resetStage(pm, progress, stageName, cwd, changeName) {
+async function resetStage(pm, progress, stageName, cwd, changeName, platformOpts = {}) {
   const defSteps = await getStageSteps(stageName, cwd, progress)
   progress.stages[stageName] = {
     status: 'in-progress',
