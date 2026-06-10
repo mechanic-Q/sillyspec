@@ -95,10 +95,6 @@ function loadModuleContextIndex(specBase, projectName) {
  * @param {string} projectName - 项目名
  * @returns {string} 上下文注入文本，空字符串表示无匹配模块
  */
-const MAX_MODULE_CONTEXT_CHARS = 4096  // 上下文注入硬限制（字节），防止 prompt 膨胀
-const MAX_MODULES_PER_INJECTION = 3   // 最多注入的模块数
-const MAX_FILES_PER_MODULE = 8        // 每个模块最多展示的文件数
-
 function buildModuleContextInjection(taskDescription, moduleIndex, specBase, projectName) {
   if (!moduleIndex || !taskDescription) return ''
   const { existsSync } = require('fs')
@@ -117,7 +113,7 @@ function buildModuleContextInjection(taskDescription, moduleIndex, specBase, pro
     // core_files 路径匹配
     const coreFiles = data.paths || data.core_files || []
     for (const p of coreFiles) {
-      if (taskLower.includes(p.toLowerCase())) { score += 1; matchReasons.push(`file:${p}`); break }  // 文件匹配只计一次
+      if (taskLower.includes(p.toLowerCase())) { score += 1; matchReasons.push(`file:${p}`); break }
     }
     if (score > 0) matched.push({ moduleId, data, score, matchReasons })
   }
@@ -125,19 +121,18 @@ function buildModuleContextInjection(taskDescription, moduleIndex, specBase, pro
   if (matched.length === 0) return ''
 
   matched.sort((a, b) => b.score - a.score)
-  const top = matched.slice(0, MAX_MODULES_PER_INJECTION)
 
   let injection = '\n### 📦 模块上下文（按相关性排序，来自 Module Context Index）\n\n'
   injection += `> 以下模块上下文由 scan 阶段生成的 _module-map.yaml 自动匹配。\n`
-  injection += `> Matched modules: ${top.map(m => m.moduleId).join(', ')}\n`
-  injection += `> Reasons: ${top.map(m => m.matchReasons.join(', ')).join('; ')}\n\n`
+  injection += `> Matched modules: ${matched.map(m => m.moduleId).join(', ')}\n`
+  injection += `> Reasons: ${matched.map(m => m.matchReasons.join(', ')).join('; ')}\n\n`
 
-  for (const { moduleId, data } of top) {
+  for (const { moduleId, data } of matched) {
     injection += `#### ${moduleId}\n`
     if (data.role) injection += `- **职责**: ${String(data.role).slice(0, 100)}\n`
     const riskLevel = data.risk_level || 'medium'
     injection += `- **风险等级**: ${riskLevel}\n`
-    const coreFiles = (data.paths || data.core_files || []).slice(0, MAX_FILES_PER_MODULE)
+    const coreFiles = data.paths || data.core_files || []
     if (coreFiles.length > 0) injection += `- **核心文件**: ${coreFiles.join(', ')}\n`
     if (data.doc) {
       const docPath = join(specBase, 'docs', projectName, data.doc)
@@ -145,16 +140,10 @@ function buildModuleContextInjection(taskDescription, moduleIndex, specBase, pro
       injection += `- **模块文档**: ${data.doc}${exists ? ' ✅' : ' ⚠️ 不存在'}\n`
     }
     const deps = data.depends_on || []
-    if (deps.length > 0) injection += `- **依赖**: ${deps.slice(0, 5).join(', ')}\n`
+    if (deps.length > 0) injection += `- **依赖**: ${deps.join(', ')}\n`
     const usedBy = data.used_by || []
-    if (usedBy.length > 0) injection += `- **被引用**: ${usedBy.slice(0, 5).join(', ')}\n`
+    if (usedBy.length > 0) injection += `- **被引用**: ${usedBy.join(', ')}\n`
     injection += '\n'
-
-    // 长度硬限制：超过阈值截断
-    if (injection.length > MAX_MODULE_CONTEXT_CHARS) {
-      injection += `<!-- Module context truncated: exceeded ${MAX_MODULE_CONTEXT_CHARS} chars -->\n`
-      break
-    }
   }
 
   return injection
