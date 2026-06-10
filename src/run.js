@@ -632,11 +632,12 @@ async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjec
 
   // 注入模块上下文（brainstorm/plan/execute 阶段，基于 Module Context Index）
   if (['brainstorm', 'plan', 'execute'].includes(stageName) && projectName) {
-    const moduleIndex = loadModuleContextIndex(specBase || join(cwd, '.sillyspec'), projectName)
+    const effectiveSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+    const moduleIndex = loadModuleContextIndex(effectiveSpecBase, projectName)
     if (moduleIndex && Object.keys(moduleIndex).length > 0) {
       // 尝试从 step prompt / changeName 匹配模块
       const taskDesc = step.prompt || changeName || ''
-      const injection = buildModuleContextInjection(taskDesc, moduleIndex, specBase || join(cwd, '.sillyspec'), projectName)
+      const injection = buildModuleContextInjection(taskDesc, moduleIndex, effectiveSpecBase, projectName)
       if (injection) {
         promptText = injection + '\n' + promptText
       }
